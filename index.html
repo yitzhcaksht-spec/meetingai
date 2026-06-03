@@ -185,6 +185,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
       <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;line-height:1.6">הזן מפתח API משלך כדי שהסיכום יופק על ידי מנוע AI במקום הסיכום המקומי. ללא מפתח — המערכת משתמשת בסיכום המקומי.</p>
       <div class="fl"><label>מנוע AI</label>
         <select id="ai-provider" onchange="onProviderChange()"></select>
+        <a id="ai-keylink" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:12px;color:var(--blue);text-decoration:none">🔗 הפקת מפתח API למנוע זה</a>
       </div>
       <div class="fl"><label>מפתח API <span id="ai-keyhint" style="color:var(--dim);font-weight:400"></span></label>
         <input type="password" id="ai-key" placeholder="הדבק כאן את המפתח שלך" autocomplete="off">
@@ -193,7 +194,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
         <input type="text" id="ai-model" placeholder="" autocomplete="off">
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin:6px 0 12px">
-        <input type="checkbox" id="ai-remember" onchange="saveAIConfig()" style="width:auto;cursor:pointer"> זכור את המפתח במחשב הזה
+        <input type="checkbox" id="ai-remember" onchange="saveAIConfig()" style="width:auto;cursor:pointer"> זכור את המפתח במחשב הזה (נשמר מקומית, מקודד)
       </label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="ab" onclick="saveAIConfig(true)">💾 שמור</button>
@@ -201,7 +202,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
         <span id="ai-status" style="font-size:12px;color:var(--muted);align-self:center"></span>
       </div>
       <div style="margin-top:12px;padding:10px 12px;background:rgba(255,184,48,.07);border:1px solid rgba(255,184,48,.25);border-radius:8px;font-size:12px;color:var(--amber);line-height:1.6">
-        ⚠️ אזהרת אבטחה: המפתח נשלח ישירות מהדפדפן לספק ה-AI. מתאים למפתח אישי לבדיקות — <strong>לא</strong> למפתח ארגוני רגיש. שמירה במחשב חושפת אותו למי שניגש לדפדפן הזה.
+        ⚠️ אזהרת אבטחה: המפתח נשלח ישירות מהדפדפן לספק ה-AI. השמירה המקומית מקודדת (לא טקסט גלוי), אך אינה הצפנה אמיתית — מי שניגש לדפדפן הזה ויודע מה הוא מחפש עשוי לחלץ אותה. מתאים למפתח אישי לבדיקות — <strong>לא</strong> למפתח ארגוני רגיש.
       </div>
     </div>
 
@@ -291,37 +292,43 @@ const S = { rec:false, recognition:null, fullText:'', markers:[], startTs:null, 
 // To add another provider, add an entry here. Types: 'openai' (OpenAI-compatible
 // chat/completions), 'gemini' (Google), 'anthropic' (Claude).
 const AI_PROVIDERS = {
-  openai:    { label:'OpenAI (GPT)',        type:'openai',    url:'https://api.openai.com/v1/chat/completions',          model:'gpt-4o-mini',                  hint:'sk-...' },
-  gemini:    { label:'Google Gemini',       type:'gemini',    url:'https://generativelanguage.googleapis.com/v1beta/models', model:'gemini-2.5-flash',         hint:'AIza...' },
-  anthropic: { label:'Anthropic (Claude)',  type:'anthropic', url:'https://api.anthropic.com/v1/messages',                model:'claude-haiku-4-5-20251001',    hint:'sk-ant-...' },
-  groq:      { label:'Groq (Llama)',        type:'openai',    url:'https://api.groq.com/openai/v1/chat/completions',      model:'llama-3.3-70b-versatile',      hint:'gsk_...' },
-  mistral:   { label:'Mistral',             type:'openai',    url:'https://api.mistral.ai/v1/chat/completions',           model:'mistral-small-latest',         hint:'...' },
-  deepseek:  { label:'DeepSeek',            type:'openai',    url:'https://api.deepseek.com/chat/completions',            model:'deepseek-chat',                hint:'sk-...' },
-  together:  { label:'Together AI',         type:'openai',    url:'https://api.together.xyz/v1/chat/completions',         model:'meta-llama/Llama-3.3-70B-Instruct-Turbo', hint:'...' },
-  openrouter:{ label:'OpenRouter',          type:'openai',    url:'https://openrouter.ai/api/v1/chat/completions',        model:'openai/gpt-4o-mini',           hint:'sk-or-...' }
+  openai:    { label:'OpenAI (GPT)',        type:'openai',    url:'https://api.openai.com/v1/chat/completions',          model:'gpt-4o-mini',                  hint:'sk-...',     keyUrl:'https://platform.openai.com/api-keys' },
+  gemini:    { label:'Google Gemini',       type:'gemini',    url:'https://generativelanguage.googleapis.com/v1beta/models', model:'gemini-2.5-flash',         hint:'AIza...',    keyUrl:'https://aistudio.google.com/apikey' },
+  anthropic: { label:'Anthropic (Claude)',  type:'anthropic', url:'https://api.anthropic.com/v1/messages',                model:'claude-haiku-4-5-20251001',    hint:'sk-ant-...', keyUrl:'https://console.anthropic.com/settings/keys' },
+  groq:      { label:'Groq (Llama)',        type:'openai',    url:'https://api.groq.com/openai/v1/chat/completions',      model:'llama-3.3-70b-versatile',      hint:'gsk_...',    keyUrl:'https://console.groq.com/keys' },
+  mistral:   { label:'Mistral',             type:'openai',    url:'https://api.mistral.ai/v1/chat/completions',           model:'mistral-small-latest',         hint:'...',        keyUrl:'https://console.mistral.ai/api-keys' },
+  deepseek:  { label:'DeepSeek',            type:'openai',    url:'https://api.deepseek.com/chat/completions',            model:'deepseek-chat',                hint:'sk-...',     keyUrl:'https://platform.deepseek.com/api_keys' },
+  together:  { label:'Together AI',         type:'openai',    url:'https://api.together.xyz/v1/chat/completions',         model:'meta-llama/Llama-3.3-70B-Instruct-Turbo', hint:'...', keyUrl:'https://api.together.xyz/settings/api-keys' },
+  openrouter:{ label:'OpenRouter',          type:'openai',    url:'https://openrouter.ai/api/v1/chat/completions',        model:'openai/gpt-4o-mini',           hint:'sk-or-...',  keyUrl:'https://openrouter.ai/keys' }
 };
 
 const AI_LS = 'meetingai_ai_cfg';
+
+// Light reversible encoding for the stored key. NOT real encryption — it only
+// prevents the key from sitting as plain text in localStorage. See UI warning.
+function encKey(s){ try{ const k='mtgAI_2026_x'; let o=''; for(let i=0;i<s.length;i++) o+=String.fromCharCode(s.charCodeAt(i)^k.charCodeAt(i%k.length)); return 'enc:'+btoa(unescape(encodeURIComponent(o))); }catch(e){ return ''; } }
+function decKey(s){ try{ if(!s) return ''; if(!s.startsWith('enc:')) return s; /* legacy plain */ const k='mtgAI_2026_x'; const d=decodeURIComponent(escape(atob(s.slice(4)))); let o=''; for(let i=0;i<d.length;i++) o+=String.fromCharCode(d.charCodeAt(i)^k.charCodeAt(i%k.length)); return o; }catch(e){ return ''; } }
 
 function initAIUI(){
   const sel = document.getElementById('ai-provider');
   if(!sel) return;
   sel.innerHTML = Object.entries(AI_PROVIDERS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
-  // load saved config
   let cfg = {};
   try{ cfg = JSON.parse(localStorage.getItem(AI_LS) || '{}'); }catch(e){}
   if(cfg.provider && AI_PROVIDERS[cfg.provider]) sel.value = cfg.provider;
   document.getElementById('ai-model').value = cfg.model || '';
   document.getElementById('ai-remember').checked = !!cfg.remember;
-  if(cfg.remember && cfg.key) document.getElementById('ai-key').value = cfg.key;
+  if(cfg.remember && cfg.key) document.getElementById('ai-key').value = decKey(cfg.key);
   onProviderChange();
-  if(cfg.remember && cfg.key) setAIStatus('✓ מפתח שמור — סיכום AI פעיל','var(--green)');
+  if(cfg.remember && cfg.key) setAIStatus('✓ מפתח שמור (מקודד) — סיכום AI פעיל','var(--green)');
 }
 
 function onProviderChange(){
   const p = AI_PROVIDERS[document.getElementById('ai-provider').value];
   document.getElementById('ai-keyhint').textContent = p ? `(${p.hint})` : '';
   document.getElementById('ai-model').placeholder = p ? p.model : '';
+  const link = document.getElementById('ai-keylink');
+  if(link && p){ link.href = p.keyUrl; link.textContent = '🔗 הפקת מפתח API ל-'+p.label; }
 }
 
 function setAIStatus(msg,color){ const el=document.getElementById('ai-status'); if(el){ el.textContent=msg; el.style.color=color||'var(--muted)'; } }
@@ -331,10 +338,10 @@ function saveAIConfig(announce){
   const model = document.getElementById('ai-model').value.trim();
   const key = document.getElementById('ai-key').value.trim();
   const remember = document.getElementById('ai-remember').checked;
-  const cfg = { provider, model, remember, key: remember ? key : '' };
+  const cfg = { provider, model, remember, key: remember ? encKey(key) : '' };
   try{ localStorage.setItem(AI_LS, JSON.stringify(cfg)); }catch(e){}
   if(announce){
-    if(key) setAIStatus('✓ נשמר — סיכום AI פעיל','var(--green)');
+    if(key) setAIStatus(remember?'✓ נשמר (מקודד) — סיכום AI פעיל':'✓ פעיל לשיחה זו (לא נשמר)','var(--green)');
     else setAIStatus('נשמרו הגדרות (ללא מפתח — סיכום מקומי)','var(--muted)');
   }
 }
