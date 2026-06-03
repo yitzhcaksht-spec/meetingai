@@ -281,6 +281,7 @@ async function startRec(){
   const rec = new SR();
   rec.lang='he-IL'; rec.continuous=true; rec.interimResults=true; rec.maxAlternatives=1;
   S.recognition=rec; S.fullText=''; S.markers=[]; S.rec=true;
+  S.manualStop=false;   // becomes true ONLY when the user presses stop
   // Persistent store of every finalized sentence. Lives on S so it survives
   // the automatic restarts Chrome performs during a meeting.
   S.segments=[];
@@ -309,22 +310,22 @@ async function startRec(){
 
   rec.onerror = ev => {
     console.warn('[ASR] onerror:', ev.error);
-    if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){ notif('הרשאת מיקרופון נדחתה — אשר וטען מחדש','e'); showLive('❌ הרשאת מיקרופון נדחתה'); S.rec=false; resetRecUI(); }
-    else if(ev.error==='audio-capture'){ notif('לא נמצא מיקרופון','e'); showLive('❌ לא נמצא מיקרופון'); S.rec=false; resetRecUI(); }
-    else if(ev.error==='network'){ notif('שגיאת רשת — נדרש אינטרנט','e'); showLive('❌ שגיאת רשת — זיהוי הדיבור צריך אינטרנט'); }
+    if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){ notif('הרשאת מיקרופון נדחתה — אשר וטען מחדש','e'); showLive('❌ הרשאת מיקרופון נדחתה'); S.rec=false; S.manualStop=true; resetRecUI(); }
+    else if(ev.error==='audio-capture'){ notif('לא נמצא מיקרופון','e'); showLive('❌ לא נמצא מיקרופון'); S.rec=false; S.manualStop=true; resetRecUI(); }
+    else if(ev.error==='network'){ notif('שגיאת רשת — מנסה שוב','e'); /* don't stop — onend will restart */ }
     /* no-speech / aborted: ignore — onend restarts automatically */
   };
 
-  // Chrome ends recognition after silence. Salvage pending interim, then restart
-  // after a short delay so Chrome fully releases the session before we reopen it.
+  // Chrome ends recognition after silence — even mid-meeting. The ONLY reason
+  // not to restart is a real user stop (S.manualStop). Anything else => restart.
   rec.onend = () => {
-    console.log('[ASR] onend — S.rec =', S.rec);
+    console.log('[ASR] onend — manualStop =', S.manualStop);
     if(lastInterim.trim()){ pushSeg(lastInterim); lastInterim=''; S.fullText = joinSegments(); }
-    if(S.rec){
+    if(!S.manualStop){
       setTimeout(() => {
-        if(!S.rec) return;
+        if(S.manualStop) return;
         try{ rec.start(); console.log('[ASR] restarted'); }
-        catch(e){ console.warn('[ASR] restart failed, retrying:', e.message); setTimeout(()=>{ if(S.rec){ try{rec.start();}catch(e2){ console.error('[ASR] retry failed:', e2.message); } } }, 500); }
+        catch(e){ console.warn('[ASR] restart failed, retrying:', e.message); setTimeout(()=>{ if(!S.manualStop){ try{rec.start();}catch(e2){ console.error('[ASR] retry failed:', e2.message); } } }, 500); }
       }, 350);
     }
   };
@@ -354,6 +355,7 @@ function resetRecUI(){
 
 function stopRec(){
   S.rec=false;
+  S.manualStop=true;   // authoritative signal: do NOT auto-restart
   if(S.recognition){ try{S.recognition.stop();}catch(e){} }
   stopTimer(); stopWave();
   document.getElementById('mic-btn').className='mic-btn';
