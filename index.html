@@ -292,8 +292,8 @@ const S = { rec:false, recognition:null, fullText:'', markers:[], startTs:null, 
 // chat/completions), 'gemini' (Google), 'anthropic' (Claude).
 const AI_PROVIDERS = {
   openai:    { label:'OpenAI (GPT)',        type:'openai',    url:'https://api.openai.com/v1/chat/completions',          model:'gpt-4o-mini',                  hint:'sk-...' },
-  gemini:    { label:'Google Gemini',       type:'gemini',    url:'https://generativelanguage.googleapis.com/v1beta/models', model:'gemini-1.5-flash',         hint:'AIza...' },
-  anthropic: { label:'Anthropic (Claude)',  type:'anthropic', url:'https://api.anthropic.com/v1/messages',                model:'claude-3-5-haiku-20241022',    hint:'sk-ant-...' },
+  gemini:    { label:'Google Gemini',       type:'gemini',    url:'https://generativelanguage.googleapis.com/v1beta/models', model:'gemini-2.5-flash',         hint:'AIza...' },
+  anthropic: { label:'Anthropic (Claude)',  type:'anthropic', url:'https://api.anthropic.com/v1/messages',                model:'claude-haiku-4-5-20251001',    hint:'sk-ant-...' },
   groq:      { label:'Groq (Llama)',        type:'openai',    url:'https://api.groq.com/openai/v1/chat/completions',      model:'llama-3.3-70b-versatile',      hint:'gsk_...' },
   mistral:   { label:'Mistral',             type:'openai',    url:'https://api.mistral.ai/v1/chat/completions',           model:'mistral-small-latest',         hint:'...' },
   deepseek:  { label:'DeepSeek',            type:'openai',    url:'https://api.deepseek.com/chat/completions',            model:'deepseek-chat',                hint:'sk-...' },
@@ -606,23 +606,28 @@ function setProc(pct,t,d){document.getElementById('proc-t').textContent=t;docume
 
 // SUMMARIZER
 function summarize(txt){
-  // normalize and split into unique, clean sentences
-  let sents=txt.split(/[.!?\n]+/).map(s=>s.trim()).filter(s=>s.length>4);
+  // normalize and split into unique, clean sentences. Hebrew speech-to-text
+  // often returns long run-ons with no punctuation, so also split on common
+  // connectors ("בנוסף", "כמו כן", "לגבי", "אנחנו צריכים"...) to surface items.
+  let raw = txt
+    .replace(/\s+(בנוסף|כמו כן|לגבי|מעבר לזה|חוץ מזה|בהמשך הבא|דבר נוסף)\s+/g, '. $1 ')
+    .replace(/\s+(אנחנו צריכים|אנחנו רוצים|צריך ש|באחריות)\s+/g, '. $1 ');
+  let sents=raw.split(/[.!?\n]+/).map(s=>s.trim()).filter(s=>s.length>4);
   sents=[...new Set(sents)]; // remove duplicates from restarts
   const has=(s,ws)=>ws.some(w=>s.includes(w));
-  const DW=['החלטנו','הוחלט','נסכם','סוכם','מאשר','אישרנו','קבענו','נקבע','ההחלטה','הסכמנו'];
-  const TW=['צריך','חייב','יטפל','תטפל','אכין','נכין','יבדוק','תבדוק','אחראי','ממנה','לשלוח','להכין','לסיים','יעביר','תעביר'];
-  const RW=['תקוע','בסיכון','חריגה','בעיה','דחוף','קריטי','לא אישרו','עיכוב','סיכון','בעייתי','חוסם'];
-  const OW=['לא ברור','טרם','ממתין','פתוח','עוד לא','צריך להחליט','לא הוחלט'];
+  const DW=['החלטנו','הוחלט','נסכם','סוכם','מאשר','אישרנו','קבענו','נקבע','ההחלטה','הסכמנו','כמו שסיכמנו','אנחנו עושים','אנחנו רוצים'];
+  const TW=['צריך','צריכים','חייב','יטפל','תטפל','אכין','נכין','יבדוק','תבדוק','אחראי','אחריות','באחריות','ממנה','לשלוח','להכין','לסיים','יעביר','תעביר','להביא','להביא לנו','לעדכן','לתקף','לתקן','להחזיר','להכניס','להריץ','אישור','לקבל','עד ה','עד יום'];
+  const RW=['תקוע','בסיכון','חריגה','בעיה','דחוף','קריטי','לא אישרו','עיכוב','סיכון','בעייתי','חוסם','מחכים','ממתינים','תלוי ב','חוסר','עדיין לא'];
+  const OW=['לא ברור','טרם','ממתין','מחכים','פתוח','עוד לא','צריך להחליט','לא הוחלט','בהמשך','נראה אם','כדי שנוכל','כדי שנדע'];
   const used=new Set();
   const pick=(ws,n)=>{const r=[];for(const s of sents){if(r.length>=n)break;if(!used.has(s)&&has(s,ws)){r.push(s);used.add(s);}}return r;};
   const decisions=pick(DW,6);
   const redFlags=pick(RW,5);
-  const tasksS=pick(TW,8);
-  const openItems=pick(OW,5);
+  const tasksS=pick(TW,12);
+  const openItems=pick(OW,6);
   S.markers.forEach(m=>{ if(m.icon==='✅') decisions.push(`[${m.time}] ${m.label}`); if(m.icon==='🚩') redFlags.push(`[${m.time}] ${m.label}`); });
   const parts=(document.getElementById('mtg-parts').value||'').split(/[,،]/).map(p=>p.trim()).filter(Boolean);
-  const tasks=tasksS.map(s=>({task:s.length>90?s.slice(0,90)+'...':s,owner:parts.find(p=>s.includes(p))||'לא נקבע',due:extractDate(s)||'לא נקבע'}));
+  const tasks=tasksS.map(s=>({task:s.length>110?s.slice(0,110)+'…':s, owner:extractOwner(s,parts), due:extractDate(s)||'לא נקבע'}));
   // Always produce a content overview from sentences that were actually said
   // (zero invention) — even when no decisions/tasks/flags were detected.
   // Pick the most informative sentences (by length), keep their original order.
@@ -650,7 +655,30 @@ function summarize(txt){
   }
   return { summary, decisions, open_items:openItems, red_flags:redFlags, tasks };
 }
-function extractDate(s){const ps=[/עד (ה?-?\d{1,2}([./]\d{1,2})?)/,/(היום|מחר|השבוע|סוף השבוע|בהקדם)/,/(\d{1,2}[./]\d{1,2}([./]\d{2,4})?)/,/(ראשון|שני|שלישי|רביעי|חמישי|שישי)/];for(const p of ps){const m=s.match(p);if(m)return m[1]||m[0];}return null;}
+// Extract the responsible person from a sentence (best-effort, Hebrew).
+function extractOwner(s, parts){
+  // 1) a known participant explicitly named
+  const p = (parts||[]).find(x => x && s.includes(x));
+  if(p) return p;
+  // 2) "באחריות <שם>" / "אחראי <שם>" — capture the name(s) right after
+  let m = s.match(/(?:באחריות(?:ו)?(?: של)?|אחראי(?:ם|ת)?(?: על)?)\s+([א-ת]{2,}(?:\s+(?:ו)?[א-ת]{2,}){0,2})/);
+  if(m){ const cand=m[1].trim().replace(/\s*(להביא|לעדכן|לתקן|להחזיר|להכין|לשלוח|על).*$/,'').trim(); if(cand) return cand; }
+  return 'לא נקבע';
+}
+
+// Extract a due date from a sentence. Returns the spoken phrase as-is when it
+// can't be normalized — more honest than guessing a wrong number.
+function extractDate(s){
+  const ps=[
+    /עד (יום \S+(?: הבא)?)/,                                   // עד יום חמישי הבא
+    /עד (ה?-?\d{1,2}(?:[./]\d{1,2})?(?:\s*ל\S+)?)/,            // עד ה-15 לשישי / עד 10/6
+    /עד (ה?(?:ראשון|שני|שלישי|רביעי|חמישי|שישי|שביעי|שמיני|תשיעי|עשירי|אחד עשר|שנים עשר|חמישה עשר|עשרים)(?:\s*ל\S+)?)/, // עד העשירי לשישי
+    /(היום|מחר|מחרתיים|השבוע|שבוע הבא|סוף השבוע|בהקדם|בקרוב)/,
+    /(\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?)/
+  ];
+  for(const p of ps){ const m=s.match(p); if(m) return (m[1]||m[0]).trim(); }
+  return null;
+}
 
 // RESULTS
 function showResults(txt,sum){
