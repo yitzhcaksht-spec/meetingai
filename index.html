@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MeetingAI — חברת החשמל</title>
+<title>SUMIF — חברת החשמל</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -157,7 +157,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
 <body>
 
 <nav>
-  <div class="nav-logo"><div class="nav-icon">⚡</div><span class="nav-name">MeetingAI</span></div>
+  <div class="nav-logo"><div class="nav-icon">⚡</div><span class="nav-name">SUMIF</span></div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('app',this)">הקלטה</button>
     <button class="nav-tab" onclick="showPage('moscow',this)">תעדוף</button>
@@ -426,11 +426,8 @@ async function summarizeWithAI(txt, cfg){
   }
   else throw new Error('סוג ספק לא נתמך');
 
-  // Extract JSON (strip code fences / surrounding text)
-  let jsonStr = raw.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-  const a=jsonStr.indexOf('{'), b=jsonStr.lastIndexOf('}');
-  if(a>=0 && b>a) jsonStr = jsonStr.slice(a,b+1);
-  const obj = JSON.parse(jsonStr);
+  // Parse with the hardened parser (repairs common model JSON flaws).
+  const obj = parseAIJson(raw);
 
   // Normalize to the expected shape; merge manual markers.
   const decisions = Array.isArray(obj.decisions)?obj.decisions.map(String):[];
@@ -485,7 +482,17 @@ async function aiComplete(prompt, cfg){
 function parseAIJson(raw){
   let j=raw.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
   const a=j.indexOf('{'),b=j.lastIndexOf('}'); if(a>=0&&b>a) j=j.slice(a,b+1);
-  return JSON.parse(j);
+  try{ return JSON.parse(j); }
+  catch(e){
+    // Models sometimes emit minor JSON flaws. Repair the common ones and retry.
+    let f=j
+      .replace(/,\s*([}\]])/g,'$1')          // trailing commas before } or ]
+      .replace(/}\s*{/g,'},{')               // missing comma between objects
+      .replace(/]\s*\[/g,'],[')              // missing comma between arrays
+      .replace(/"\s*\n\s*"/g,'", "')         // missing comma between strings on new lines
+      .replace(/([}\]"])\s*\n\s*"/g,'$1, "'); // value followed by next string without comma
+    return JSON.parse(f);
+  }
 }
 
 // Ask the AI to design a presentation (slide titles + bullet points) from the
@@ -577,7 +584,7 @@ async function startRec(){
     console.warn('[ASR] onerror:', ev.error);
     if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){ notif('הרשאת מיקרופון נדחתה — אשר וטען מחדש','e'); showLive('❌ הרשאת מיקרופון נדחתה'); S.rec=false; S.manualStop=true; resetRecUI(); }
     else if(ev.error==='audio-capture'){ notif('לא נמצא מיקרופון','e'); showLive('❌ לא נמצא מיקרופון'); S.rec=false; S.manualStop=true; resetRecUI(); }
-    else if(ev.error==='network'){ notif('שגיאת רשת — מנסה שוב','e'); /* don't stop — onend will restart */ }
+    else if(ev.error==='network'){ if(lastInterim.trim()){ pushSeg(lastInterim); lastInterim=''; S.fullText=joinSegments(); } notif('שגיאת רשת רגעית — ממשיך','i'); /* onend will restart */ }
     /* no-speech / aborted: ignore — onend restarts automatically */
   };
 
@@ -846,13 +853,15 @@ async function dlDocx(){
   notif('מכין מסמך Word...','i');
   try{
     await loadScript('https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js');
-    const D=window.docx, {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell,WidthType,AlignmentType}=D;
+    const D=window.docx, {Document,Packer,Paragraph,TextRun,HeadingLevel,Table,TableRow,TableCell}=D;
+    const RIGHT=(D.AlignmentType&&D.AlignmentType.RIGHT)||'right';
+    const PCT=(D.WidthType&&D.WidthType.PERCENTAGE)||'pct';
     const s=window._sum, name=window._name||'פגישה', date=new Date().toLocaleDateString('he-IL');
-    const P=(text,opts={})=>new Paragraph({bidirectional:true,alignment:AlignmentType.RIGHT,spacing:{after:120},children:[new TextRun({text,rightToLeft:true,...opts})]});
-    const H=(text,level)=>new Paragraph({bidirectional:true,alignment:AlignmentType.RIGHT,heading:level,spacing:{before:240,after:120},children:[new TextRun({text,rightToLeft:true,bold:true})]});
-    const cell=(text,bold)=>new TableCell({children:[new Paragraph({bidirectional:true,alignment:AlignmentType.RIGHT,children:[new TextRun({text:String(text),rightToLeft:true,bold:!!bold})]})]});
+    const P=(text,opts={})=>new Paragraph({bidirectional:true,alignment:RIGHT,spacing:{after:120},children:[new TextRun({text,rightToLeft:true,...opts})]});
+    const H=(text,level)=>new Paragraph({bidirectional:true,alignment:RIGHT,heading:level,spacing:{before:240,after:120},children:[new TextRun({text,rightToLeft:true,bold:true})]});
+    const cell=(text,bold)=>new TableCell({children:[new Paragraph({bidirectional:true,alignment:RIGHT,children:[new TextRun({text:String(text),rightToLeft:true,bold:!!bold})]})]});
     const ch=[];
-    ch.push(new Paragraph({bidirectional:true,alignment:AlignmentType.RIGHT,heading:HeadingLevel.TITLE,children:[new TextRun({text:'סיכום פגישה — '+name,rightToLeft:true,bold:true})]}));
+    ch.push(new Paragraph({bidirectional:true,alignment:RIGHT,heading:HeadingLevel.TITLE,children:[new TextRun({text:'סיכום פגישה — '+name,rightToLeft:true,bold:true})]}));
     ch.push(P(date,{color:'888888'}));
     if(s.summary){ ch.push(H('סיכום כללי',HeadingLevel.HEADING_1)); s.summary.split('\n').forEach(l=>{ if(l.trim()) ch.push(P(l.trim())); }); }
     if(s.decisions.length){ ch.push(H('החלטות',HeadingLevel.HEADING_1)); s.decisions.forEach((d,i)=>ch.push(P((i+1)+'. '+d))); }
@@ -861,11 +870,15 @@ async function dlDocx(){
     if(s.tasks.length){ ch.push(H('טבלת משימות',HeadingLevel.HEADING_1));
       const header=new TableRow({tableHeader:true,children:[cell('משימה',1),cell('אחראי',1),cell('תאריך יעד',1)]});
       const rows=s.tasks.map(t=>new TableRow({children:[cell(t.task),cell(t.owner),cell(t.due)]}));
-      ch.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},visuallyRightToLeft:true,rows:[header,...rows]}));
+      ch.push(new Table({width:{size:100,type:PCT},visuallyRightToLeft:true,rows:[header,...rows]}));
     }
     ch.push(H('תמלול מלא',HeadingLevel.HEADING_1));
     (window._txt||'').split('\n').forEach(l=>{ if(l.trim()) ch.push(P(l.trim())); });
-    const doc=new Document({sections:[{properties:{},children:ch}]});
+    // Set RTL + right alignment as the document-wide default, so nothing falls back to LTR.
+    const doc=new Document({
+      styles:{ default:{ document:{ run:{ rightToLeft:true }, paragraph:{ bidirectional:true, alignment:RIGHT } } } },
+      sections:[{ properties:{}, children:ch }]
+    });
     saveBlob(await Packer.toBlob(doc), name+'_סיכום.docx');
     notif('מסמך Word הורד','s');
   }catch(e){ console.error('docx',e); notif('יצירת Word נכשלה — דרוש אינטרנט','e'); }
@@ -877,12 +890,39 @@ async function dlDocx(){
 async function dlPptx(){
   if(!window._sum){ notif('אין סיכום','e'); return; }
   const RTL={rtlMode:true,align:'right'};
+  const BG='0d1520', PANEL='141f30', INK='eef3fb';
   const aiCfg=getAIConfig();
   try{
     await loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js');
     const name=window._name||'פגישה', date=new Date().toLocaleDateString('he-IL');
-    const pptx=new PptxGenJS(); pptx.layout='LAYOUT_WIDE';
-    const bullets=(sl,title,items,color)=>{ sl.background={color:'0d1520'}; sl.addText(title,{x:0.5,y:0.4,w:11.3,h:0.8,fontSize:30,bold:true,color:color,...RTL}); sl.addText((items.length?items:['—']).map(x=>({text:String(x),options:{bullet:true,breakLine:true}})),{x:0.5,y:1.4,w:11.3,h:5.4,fontSize:17,color:'e2eaf6',...RTL,lineSpacingMultiple:1.25,valign:'top'}); };
+    const pptx=new PptxGenJS(); pptx.layout='LAYOUT_WIDE';   // 13.33 x 7.5
+    const RECT=pptx.ShapeType.rect;
+    let pageNo=0;
+
+    // Title slide with a colored band and accent bar on the right (RTL side).
+    const titleSlide=(title,sub)=>{
+      const sl=pptx.addSlide(); sl.background={color:BG};
+      sl.addShape(RECT,{x:0,y:0,w:13.33,h:7.5,fill:{color:BG}});
+      sl.addShape(RECT,{x:13.03,y:0,w:0.3,h:7.5,fill:{color:'4d9fff'}});        // right accent bar
+      sl.addShape(RECT,{x:0,y:5.0,w:13.33,h:0.06,fill:{color:'2a3a55'}});       // divider
+      sl.addText(title,{x:0.6,y:2.4,w:11.9,h:1.4,fontSize:46,bold:true,color:'4d9fff',...RTL});
+      sl.addText(sub,{x:0.6,y:3.9,w:11.9,h:0.7,fontSize:22,color:INK,...RTL});
+      sl.addText('SUMIF',{x:0.6,y:6.7,w:6,h:0.4,fontSize:12,color:'5a6b85',align:'right',rtlMode:true});
+    };
+
+    // Content slide: header band + accent title + slide number.
+    const bullets=(title,items,accent)=>{
+      const sl=pptx.addSlide(); sl.background={color:BG};
+      pageNo++;
+      sl.addShape(RECT,{x:13.03,y:0,w:0.3,h:7.5,fill:{color:accent}});           // right accent bar
+      sl.addShape(RECT,{x:0,y:0,w:13.33,h:1.25,fill:{color:PANEL}});             // header band
+      sl.addShape(RECT,{x:0,y:1.25,w:13.33,h:0.05,fill:{color:accent}});         // header underline
+      sl.addText(title,{x:0.6,y:0.28,w:11.9,h:0.7,fontSize:30,bold:true,color:accent,...RTL});
+      sl.addText((items.length?items:['—']).map(x=>({text:String(x),options:{bullet:{code:'2022'},breakLine:true}})),
+        {x:0.6,y:1.7,w:11.9,h:5.2,fontSize:18,color:INK,...RTL,lineSpacingMultiple:1.3,valign:'top'});
+      sl.addText(String(pageNo),{x:12.5,y:6.95,w:0.6,h:0.35,fontSize:12,color:'5a6b85',align:'center'});
+      return sl;
+    };
 
     let aiSlides=null;
     if(aiCfg){
@@ -891,15 +931,12 @@ async function dlPptx(){
       catch(e){ console.error('pptx-ai',e); notif('בניית מצגת AI נכשלה — מצגת בסיסית במקום','e'); aiSlides=null; }
     }
 
+    const palette=['00d68f','4d9fff','ffb830','ff4d6a','9d7bff','29c2c9'];
+
     if(aiSlides){
-      // AI-designed deck
-      let t=pptx.addSlide(); t.background={color:'0d1520'};
-      t.addText(aiSlides.title||'סיכום פגישה',{x:0.5,y:1.7,w:11.3,h:1.2,fontSize:42,bold:true,color:'4d9fff',...RTL});
-      t.addText(name+'   |   '+date,{x:0.5,y:3.0,w:11.3,h:0.6,fontSize:20,color:'e2eaf6',...RTL});
-      const palette=['00d68f','4d9fff','ffb830','ff4d6a','9d7bff'];
-      aiSlides.slides.forEach((s,i)=>bullets(pptx.addSlide(), s.title, s.bullets, palette[i%palette.length]));
-      // always append the task table if we have structured tasks
-      if(window._sum.tasks?.length) addTaskTableSlide(pptx, window._sum.tasks, RTL);
+      titleSlide(aiSlides.title||'סיכום פגישה', name+'   |   '+date);
+      aiSlides.slides.forEach((s,i)=>bullets(s.title, s.bullets, palette[i%palette.length]));
+      if(window._sum.tasks?.length) addTaskTableSlide(pptx, window._sum.tasks, RTL, ()=>++pageNo);
       await pptx.writeFile({fileName:name+'_מצגת.pptx'});
       notif('✓ מצגת AI הורדה','s');
       return;
@@ -907,26 +944,34 @@ async function dlPptx(){
 
     // Basic deck from the existing summary
     const s=window._sum;
-    let t=pptx.addSlide(); t.background={color:'0d1520'};
-    t.addText('סיכום פגישה',{x:0.5,y:1.7,w:11.3,h:1,fontSize:44,bold:true,color:'4d9fff',...RTL});
-    t.addText(name+'   |   '+date,{x:0.5,y:2.9,w:11.3,h:0.6,fontSize:20,color:'e2eaf6',...RTL});
-    if(s.summary) bullets(pptx.addSlide(),'סיכום כללי',s.summary.split('\n').filter(l=>l.trim()),'00d68f');
-    if(s.decisions.length) bullets(pptx.addSlide(),'החלטות',s.decisions,'4d9fff');
-    if(s.open_items.length) bullets(pptx.addSlide(),'נושאים פתוחים',s.open_items,'ffb830');
-    if(s.red_flags.length) bullets(pptx.addSlide(),'דגלים אדומים',s.red_flags,'ff4d6a');
-    if(s.tasks.length) addTaskTableSlide(pptx, s.tasks, RTL);
+    titleSlide('סיכום פגישה', name+'   |   '+date);
+    if(s.summary) bullets('סיכום כללי', s.summary.split('\n').filter(l=>l.trim()), '00d68f');
+    if(s.decisions.length) bullets('החלטות', s.decisions, '4d9fff');
+    if(s.open_items.length) bullets('נושאים פתוחים', s.open_items, 'ffb830');
+    if(s.red_flags.length) bullets('דגלים אדומים', s.red_flags, 'ff4d6a');
+    if(s.tasks.length) addTaskTableSlide(pptx, s.tasks, RTL, ()=>++pageNo);
     await pptx.writeFile({fileName:name+'_מצגת.pptx'});
     notif('מצגת הורדה','s');
   }catch(e){ console.error('pptx',e); notif('יצירת מצגת נכשלה — דרוש אינטרנט','e'); }
 }
 
-function addTaskTableSlide(pptx, tasks, RTL){
-  let st=pptx.addSlide(); st.background={color:'0d1520'};
-  st.addText('טבלת משימות',{x:0.5,y:0.4,w:11.3,h:0.8,fontSize:30,bold:true,color:'00d68f',...RTL});
-  const hc={bold:true,fill:'162238',color:'ffffff',...RTL};
+function addTaskTableSlide(pptx, tasks, RTL, nextNo){
+  const BG='0d1520', PANEL='141f30', INK='eef3fb', accent='00d68f';
+  const RECT=pptx.ShapeType.rect;
+  const st=pptx.addSlide(); st.background={color:BG};
+  st.addShape(RECT,{x:13.03,y:0,w:0.3,h:7.5,fill:{color:accent}});
+  st.addShape(RECT,{x:0,y:0,w:13.33,h:1.25,fill:{color:PANEL}});
+  st.addShape(RECT,{x:0,y:1.25,w:13.33,h:0.05,fill:{color:accent}});
+  st.addText('טבלת משימות',{x:0.6,y:0.28,w:11.9,h:0.7,fontSize:30,bold:true,color:accent,...RTL});
+  const hc={bold:true,fill:{color:'1d2c44'},color:'ffffff',...RTL,valign:'middle'};
   const rows=[[{text:'תאריך יעד',options:hc},{text:'אחראי',options:hc},{text:'משימה',options:hc}]];
-  tasks.forEach(x=>rows.push([{text:String(x.due),options:{...RTL,color:'e2eaf6'}},{text:String(x.owner),options:{...RTL,color:'e2eaf6'}},{text:String(x.task),options:{...RTL,color:'e2eaf6'}}]));
-  st.addTable(rows,{x:0.5,y:1.4,w:11.3,fontSize:13,border:{type:'solid',color:'243649',pt:1},color:'e2eaf6',valign:'middle',colW:[2.3,2.3,6.7]});
+  tasks.forEach((x,i)=>{ const f={color:i%2?'10192a':'0d1520'}; rows.push([
+    {text:String(x.due),options:{...RTL,color:INK,fill:f}},
+    {text:String(x.owner),options:{...RTL,color:INK,fill:f}},
+    {text:String(x.task),options:{...RTL,color:INK,fill:f}}
+  ]);});
+  st.addTable(rows,{x:0.6,y:1.7,w:11.9,fontSize:13,border:{type:'solid',color:'2a3a55',pt:1},valign:'middle',colW:[2.4,2.4,7.1],rowH:0.5});
+  if(nextNo) st.addText(String(nextNo()),{x:12.5,y:6.95,w:0.6,h:0.35,fontSize:12,color:'5a6b85',align:'center'});
 }
 function newRec(){S.fullText='';S.markers=[];document.getElementById('rec-timer').textContent='00:00';document.getElementById('mlog').innerHTML='<div class="mlog-empty">סימונים יופיעו כאן</div>';document.getElementById('results').style.display='none';document.getElementById('proc').style.display='none';document.getElementById('rec-card').style.display='block';document.getElementById('controls-row').style.display='grid';document.getElementById('ai-card').style.display='block';document.getElementById('mtg-name').value='';document.getElementById('mtg-parts').value='';document.getElementById('live-preview').style.display='none';resetRecUI();document.getElementById('rec-hint').textContent='המערכת תקליט את הפגישה. בסיום — תוצג התמלול והסיכום.';window._txt=null;window._sum=null;}
 
