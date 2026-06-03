@@ -290,6 +290,7 @@ async function startRec(){
   const pushSeg = s => { const c=s.trim(); if(c) S.segments.push(/[.!?]$/.test(c)?c:c+'.'); };
 
   rec.onstart = () => {
+    console.log('[ASR] onstart — listening. segments so far:', S.segments.length);
     document.getElementById('rec-status').textContent='● מקליט — מאזין...';
     if(!S.segments.length && !lastInterim) showLive('✓ זיהוי הדיבור פעיל. דבר עכשיו.');
   };
@@ -298,7 +299,7 @@ async function startRec(){
     let interim = '';
     for(let i=ev.resultIndex;i<ev.results.length;i++){
       const t = ev.results[i][0].transcript;
-      if(ev.results[i].isFinal) pushSeg(t);
+      if(ev.results[i].isFinal){ pushSeg(t); console.log('[ASR] final segment:', t.trim()); }
       else interim += t;
     }
     lastInterim = interim;
@@ -307,18 +308,24 @@ async function startRec(){
   };
 
   rec.onerror = ev => {
+    console.warn('[ASR] onerror:', ev.error);
     if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){ notif('הרשאת מיקרופון נדחתה — אשר וטען מחדש','e'); showLive('❌ הרשאת מיקרופון נדחתה'); S.rec=false; resetRecUI(); }
     else if(ev.error==='audio-capture'){ notif('לא נמצא מיקרופון','e'); showLive('❌ לא נמצא מיקרופון'); S.rec=false; resetRecUI(); }
     else if(ev.error==='network'){ notif('שגיאת רשת — נדרש אינטרנט','e'); showLive('❌ שגיאת רשת — זיהוי הדיבור צריך אינטרנט'); }
     /* no-speech / aborted: ignore — onend restarts automatically */
   };
 
-  // Chrome ends recognition after silence. Salvage any pending interim, then
-  // restart so listening continues. Only restart on a genuine end (not on stop).
+  // Chrome ends recognition after silence. Salvage pending interim, then restart
+  // after a short delay so Chrome fully releases the session before we reopen it.
   rec.onend = () => {
+    console.log('[ASR] onend — S.rec =', S.rec);
+    if(lastInterim.trim()){ pushSeg(lastInterim); lastInterim=''; S.fullText = joinSegments(); }
     if(S.rec){
-      if(lastInterim.trim()){ pushSeg(lastInterim); lastInterim=''; S.fullText = joinSegments(); }
-      try{ rec.start(); }catch(e){ setTimeout(()=>{ if(S.rec){ try{rec.start();}catch(e2){} } }, 300); }
+      setTimeout(() => {
+        if(!S.rec) return;
+        try{ rec.start(); console.log('[ASR] restarted'); }
+        catch(e){ console.warn('[ASR] restart failed, retrying:', e.message); setTimeout(()=>{ if(S.rec){ try{rec.start();}catch(e2){ console.error('[ASR] retry failed:', e2.message); } } }, 500); }
+      }, 350);
     }
   };
 
@@ -414,16 +421,31 @@ function summarize(txt){
   S.markers.forEach(m=>{ if(m.icon==='✅') decisions.push(`[${m.time}] ${m.label}`); if(m.icon==='🚩') redFlags.push(`[${m.time}] ${m.label}`); });
   const parts=(document.getElementById('mtg-parts').value||'').split(/[,،]/).map(p=>p.trim()).filter(Boolean);
   const tasks=tasksS.map(s=>({task:s.length>90?s.slice(0,90)+'...':s,owner:parts.find(p=>s.includes(p))||'לא נקבע',due:extractDate(s)||'לא נקבע'}));
-  // Build a genuine overview — NOT a copy of the transcript opening.
-  // Reports what was found, without inventing content.
+  // Always produce a content overview from sentences that were actually said
+  // (zero invention) — even when no decisions/tasks/flags were detected.
+  // Pick the most informative sentences (by length), keep their original order.
+  const overviewPool = sents.filter(s => !used.has(s));
+  const overview = (overviewPool.length ? overviewPool : sents)
+    .map((s, idx) => ({ s, idx, len: s.length }))
+    .sort((a, b) => b.len - a.len)        // most informative first
+    .slice(0, 3)                          // up to 3 sentences
+    .sort((a, b) => a.idx - b.idx)        // restore chronological order
+    .map(o => o.s.length > 140 ? o.s.slice(0, 140) + '…' : o.s);
+
   const counts=[];
   if(decisions.length) counts.push(`${decisions.length} החלטות`);
   if(tasks.length) counts.push(`${tasks.length} משימות`);
   if(openItems.length) counts.push(`${openItems.length} נושאים פתוחים`);
   if(redFlags.length) counts.push(`${redFlags.length} דגלים אדומים`);
-  const summary = sents.length
-    ? `בדיון תומללו ${sents.length} משפטים. זוהו: ${counts.length ? counts.join(', ') : 'ללא פריטים מובחנים'}.`
-    : 'לא תומלל תוכן בדיון.';
+
+  let summary;
+  if(!sents.length){
+    summary = 'לא תומלל תוכן בדיון.';
+  } else {
+    summary = overview.join('. ') + (overview.length ? '.' : '');
+    summary += `\n\n(תומללו ${sents.length} משפטים`;
+    summary += counts.length ? `; זוהו ${counts.join(', ')}.)` : '; לא זוהו פריטים מובחנים.)';
+  }
   return { summary, decisions, open_items:openItems, red_flags:redFlags, tasks };
 }
 function extractDate(s){const ps=[/עד (ה?-?\d{1,2}([./]\d{1,2})?)/,/(היום|מחר|השבוע|סוף השבוע|בהקדם)/,/(\d{1,2}[./]\d{1,2}([./]\d{2,4})?)/,/(ראשון|שני|שלישי|רביעי|חמישי|שישי)/];for(const p of ps){const m=s.match(p);if(m)return m[1]||m[0];}return null;}
@@ -447,7 +469,7 @@ function showResults(txt,sum){
     <button class="ab" onclick="newRec()">🎤 פגישה חדשה</button>
   </div>`;
 
-  if(sum.summary) h+=`<div class="rs"><h3><span>📝</span> סיכום כללי</h3><div class="box">${esc(sum.summary)}</div></div>`;
+  if(sum.summary) h+=`<div class="rs"><h3><span>📝</span> סיכום כללי</h3><div class="box">${esc(sum.summary).replace(/\n/g,'<br>')}</div></div>`;
 
   if(sum.decisions.length){h+=`<div class="rs"><h3><span>⚖️</span> החלטות</h3><div class="dec-list">`;sum.decisions.forEach((d,i)=>h+=`<div class="dec-item"><div class="dec-num">${i+1}</div><div class="dec-txt">${esc(d)}</div></div>`);h+=`</div></div>`;}
 
