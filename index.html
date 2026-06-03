@@ -285,24 +285,32 @@ async function startRec(){
   // the many automatic restarts Chrome performs during a long meeting.
   S.segments=[];
   let lastInterim='';   // current interim (not yet finalized)
+  let alive=false;      // is a recognition session currently running
+  let starting=false;   // guard against overlapping start() calls
 
   const joinSegments = () => S.segments.join(' ');
+  const pushSeg = s => { const c=s.trim(); if(c) S.segments.push(/[.!?]$/.test(c)?c:c+'.'); };
+
+  // Safe (re)start — never throws, never double-starts.
+  function safeStart(){
+    if(!S.rec || alive || starting) return;
+    starting=true;
+    try{ rec.start(); }
+    catch(e){ starting=false; }   // already running — onstart will reset alive
+  }
 
   rec.onstart = () => {
+    alive=true; starting=false;
     document.getElementById('rec-status').textContent='● מקליט — מאזין...';
-    showLive('✓ זיהוי הדיבור פעיל. דבר עכשיו.');
+    if(!S.segments.length && !lastInterim) showLive('✓ זיהוי הדיבור פעיל. דבר עכשיו.');
   };
 
   rec.onresult = ev => {
     let interim = '';
     for(let i=ev.resultIndex;i<ev.results.length;i++){
       const t = ev.results[i][0].transcript;
-      if(ev.results[i].isFinal){
-        const clean = t.trim();
-        if(clean) S.segments.push(/[.!?]$/.test(clean) ? clean : clean + '.');
-      } else {
-        interim += t;
-      }
+      if(ev.results[i].isFinal) pushSeg(t);
+      else interim += t;
     }
     lastInterim = interim;
     S.fullText = joinSegments();
@@ -310,26 +318,29 @@ async function startRec(){
   };
 
   rec.onerror = ev => {
-    if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){ notif('הרשאת מיקרופון נדחתה — אשר וטען מחדש','e'); showLive('❌ הרשאת מיקרופון נדחתה'); S.rec=false; resetRecUI(); }
-    else if(ev.error==='audio-capture'){ notif('לא נמצא מיקרופון','e'); showLive('❌ לא נמצא מיקרופון'); S.rec=false; resetRecUI(); }
-    else if(ev.error==='network'){ notif('שגיאת רשת — נדרש אינטרנט','e'); showLive('❌ שגיאת רשת — זיהוי הדיבור צריך אינטרנט'); }
-    else if(ev.error==='no-speech'){ /* keep listening */ }
-    else if(ev.error!=='aborted'){ /* ignore transient */ }
+    if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){ notif('הרשאת מיקרופון נדחתה — אשר וטען מחדש','e'); showLive('❌ הרשאת מיקרופון נדחתה'); S.rec=false; if(S.recWatchdog)clearInterval(S.recWatchdog); resetRecUI(); }
+    else if(ev.error==='audio-capture'){ notif('לא נמצא מיקרופון','e'); showLive('❌ לא נמצא מיקרופון'); S.rec=false; if(S.recWatchdog)clearInterval(S.recWatchdog); resetRecUI(); }
+    else if(ev.error==='network'){ notif('שגיאת רשת — מנסה להתחבר מחדש','e'); /* keep S.rec true — watchdog will retry */ }
+    /* no-speech / aborted / transient: ignore — onend + watchdog handle recovery */
   };
 
-  // Chrome stops recognition after silence — restart instantly to avoid losing words.
+  // Chrome ends recognition after silence or a few minutes. Salvage any pending
+  // interim text, then restart. A watchdog (below) catches silent restart failures.
   rec.onend = () => {
+    alive=false;
     if(S.rec){
-      // salvage any interim that didn't finalize before the stop
-      const li = lastInterim.trim();
-      if(li){ S.segments.push(/[.!?]$/.test(li) ? li : li + '.'); lastInterim=''; S.fullText = joinSegments(); }
-      try{ rec.start(); }catch(e){ setTimeout(()=>{ if(S.rec){ try{rec.start();}catch(e2){} } }, 150); }
+      if(lastInterim.trim()){ pushSeg(lastInterim); lastInterim=''; S.fullText = joinSegments(); }
+      setTimeout(safeStart, 200);
     }
   };
 
+  // Watchdog — if the session died and didn't come back, revive it.
+  if(S.recWatchdog) clearInterval(S.recWatchdog);
+  S.recWatchdog = setInterval(() => { if(S.rec && !alive) safeStart(); }, 3000);
+
   S._getFinal = () => (joinSegments() + ' ' + lastInterim).trim();
 
-  try{ rec.start(); }catch(e){ notif('שגיאה בהפעלה','e'); S.rec=false; return; }
+  try{ rec.start(); }catch(e){ notif('שגיאה בהפעלה','e'); S.rec=false; if(S.recWatchdog)clearInterval(S.recWatchdog); return; }
 
   document.getElementById('mic-btn').className='mic-btn rec';
   document.getElementById('mic-btn').textContent='⏹';
@@ -352,6 +363,7 @@ function resetRecUI(){
 
 function stopRec(){
   S.rec=false;
+  if(S.recWatchdog){ clearInterval(S.recWatchdog); S.recWatchdog=null; }
   if(S.recognition){ try{S.recognition.stop();}catch(e){} }
   stopTimer(); stopWave();
   document.getElementById('mic-btn').className='mic-btn';
