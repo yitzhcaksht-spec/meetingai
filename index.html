@@ -57,6 +57,8 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
 .fl label{font-size:11px;color:var(--muted);display:block;margin-bottom:5px}
 .fl input{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;font-family:'Rubik',sans-serif;outline:none;transition:border-color .15s}
 .fl input:focus{border-color:var(--blue)}
+.fl select{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;font-family:'Rubik',sans-serif;outline:none;cursor:pointer}
+.fl select:focus{border-color:var(--blue)}
 .marker-btns{display:flex;gap:7px;margin-bottom:10px}
 .mbtn{flex:1;padding:10px 4px;background:var(--s2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:'Rubik',sans-serif;font-size:11px;font-weight:600;color:var(--muted);transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:4px}
 .mbtn:hover:not(:disabled){border-color:var(--blue);color:var(--text)}
@@ -177,6 +179,32 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
       <div id="live-preview" style="display:none;margin-top:18px;padding:14px 16px;background:var(--s2);border:1px solid var(--border);border-radius:10px;font-size:14px;line-height:1.6;text-align:right;max-height:140px;overflow-y:auto;color:var(--text)"></div>
     </div>
 
+    <!-- AI Settings -->
+    <div class="ctrl-card" id="ai-card" style="margin-bottom:24px">
+      <h4>סיכום חכם (AI) — אופציונלי</h4>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;line-height:1.6">הזן מפתח API משלך כדי שהסיכום יופק על ידי מנוע AI במקום הסיכום המקומי. ללא מפתח — המערכת משתמשת בסיכום המקומי.</p>
+      <div class="fl"><label>מנוע AI</label>
+        <select id="ai-provider" onchange="onProviderChange()"></select>
+      </div>
+      <div class="fl"><label>מפתח API <span id="ai-keyhint" style="color:var(--dim);font-weight:400"></span></label>
+        <input type="password" id="ai-key" placeholder="הדבק כאן את המפתח שלך" autocomplete="off">
+      </div>
+      <div class="fl"><label>מודל (אופציונלי — ריק = ברירת מחדל)</label>
+        <input type="text" id="ai-model" placeholder="" autocomplete="off">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin:6px 0 12px">
+        <input type="checkbox" id="ai-remember" onchange="saveAIConfig()" style="width:auto;cursor:pointer"> זכור את המפתח במחשב הזה
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="ab" onclick="saveAIConfig(true)">💾 שמור</button>
+        <button class="ab" onclick="clearAIKey()">🗑 נקה מפתח</button>
+        <span id="ai-status" style="font-size:12px;color:var(--muted);align-self:center"></span>
+      </div>
+      <div style="margin-top:12px;padding:10px 12px;background:rgba(255,184,48,.07);border:1px solid rgba(255,184,48,.25);border-radius:8px;font-size:12px;color:var(--amber);line-height:1.6">
+        ⚠️ אזהרת אבטחה: המפתח נשלח ישירות מהדפדפן לספק ה-AI. מתאים למפתח אישי לבדיקות — <strong>לא</strong> למפתח ארגוני רגיש. שמירה במחשב חושפת אותו למי שניגש לדפדפן הזה.
+      </div>
+    </div>
+
     <!-- Controls -->
     <div class="controls-row" id="controls-row">
       <div class="ctrl-card">
@@ -258,6 +286,154 @@ function showPage(id, btn){
 }
 
 const S = { rec:false, recognition:null, fullText:'', markers:[], startTs:null, timerIv:null, waveIv:null };
+
+/* ═══════════════ AI SUMMARY ENGINE ═══════════════ */
+// To add another provider, add an entry here. Types: 'openai' (OpenAI-compatible
+// chat/completions), 'gemini' (Google), 'anthropic' (Claude).
+const AI_PROVIDERS = {
+  openai:    { label:'OpenAI (GPT)',        type:'openai',    url:'https://api.openai.com/v1/chat/completions',          model:'gpt-4o-mini',                  hint:'sk-...' },
+  gemini:    { label:'Google Gemini',       type:'gemini',    url:'https://generativelanguage.googleapis.com/v1beta/models', model:'gemini-1.5-flash',         hint:'AIza...' },
+  anthropic: { label:'Anthropic (Claude)',  type:'anthropic', url:'https://api.anthropic.com/v1/messages',                model:'claude-3-5-haiku-20241022',    hint:'sk-ant-...' },
+  groq:      { label:'Groq (Llama)',        type:'openai',    url:'https://api.groq.com/openai/v1/chat/completions',      model:'llama-3.3-70b-versatile',      hint:'gsk_...' },
+  mistral:   { label:'Mistral',             type:'openai',    url:'https://api.mistral.ai/v1/chat/completions',           model:'mistral-small-latest',         hint:'...' },
+  deepseek:  { label:'DeepSeek',            type:'openai',    url:'https://api.deepseek.com/chat/completions',            model:'deepseek-chat',                hint:'sk-...' },
+  together:  { label:'Together AI',         type:'openai',    url:'https://api.together.xyz/v1/chat/completions',         model:'meta-llama/Llama-3.3-70B-Instruct-Turbo', hint:'...' },
+  openrouter:{ label:'OpenRouter',          type:'openai',    url:'https://openrouter.ai/api/v1/chat/completions',        model:'openai/gpt-4o-mini',           hint:'sk-or-...' }
+};
+
+const AI_LS = 'meetingai_ai_cfg';
+
+function initAIUI(){
+  const sel = document.getElementById('ai-provider');
+  if(!sel) return;
+  sel.innerHTML = Object.entries(AI_PROVIDERS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+  // load saved config
+  let cfg = {};
+  try{ cfg = JSON.parse(localStorage.getItem(AI_LS) || '{}'); }catch(e){}
+  if(cfg.provider && AI_PROVIDERS[cfg.provider]) sel.value = cfg.provider;
+  document.getElementById('ai-model').value = cfg.model || '';
+  document.getElementById('ai-remember').checked = !!cfg.remember;
+  if(cfg.remember && cfg.key) document.getElementById('ai-key').value = cfg.key;
+  onProviderChange();
+  if(cfg.remember && cfg.key) setAIStatus('✓ מפתח שמור — סיכום AI פעיל','var(--green)');
+}
+
+function onProviderChange(){
+  const p = AI_PROVIDERS[document.getElementById('ai-provider').value];
+  document.getElementById('ai-keyhint').textContent = p ? `(${p.hint})` : '';
+  document.getElementById('ai-model').placeholder = p ? p.model : '';
+}
+
+function setAIStatus(msg,color){ const el=document.getElementById('ai-status'); if(el){ el.textContent=msg; el.style.color=color||'var(--muted)'; } }
+
+function saveAIConfig(announce){
+  const provider = document.getElementById('ai-provider').value;
+  const model = document.getElementById('ai-model').value.trim();
+  const key = document.getElementById('ai-key').value.trim();
+  const remember = document.getElementById('ai-remember').checked;
+  const cfg = { provider, model, remember, key: remember ? key : '' };
+  try{ localStorage.setItem(AI_LS, JSON.stringify(cfg)); }catch(e){}
+  if(announce){
+    if(key) setAIStatus('✓ נשמר — סיכום AI פעיל','var(--green)');
+    else setAIStatus('נשמרו הגדרות (ללא מפתח — סיכום מקומי)','var(--muted)');
+  }
+}
+
+function clearAIKey(){
+  document.getElementById('ai-key').value='';
+  try{ const cfg=JSON.parse(localStorage.getItem(AI_LS)||'{}'); cfg.key=''; localStorage.setItem(AI_LS,JSON.stringify(cfg)); }catch(e){}
+  setAIStatus('המפתח נוקה — חזרה לסיכום מקומי','var(--amber)');
+}
+
+// Returns {provider, model, key} from the live form, or null if no key entered.
+function getAIConfig(){
+  const provider = document.getElementById('ai-provider').value;
+  const key = document.getElementById('ai-key').value.trim();
+  if(!key) return null;
+  const p = AI_PROVIDERS[provider];
+  const model = document.getElementById('ai-model').value.trim() || p.model;
+  return { provider, model, key, def:p };
+}
+
+// The instruction sent to every provider. Asks for strict JSON, in Hebrew, zero invention.
+function buildAIPrompt(txt, participants){
+  return `אתה עוזר לסיכום פגישות בעברית. להלן תמלול גולמי של פגישה. הפק סיכום מקצועי.
+חוקים מחייבים:
+- אל תמציא מידע שלא נאמר בתמלול. אם משהו לא נאמר — אל תוסיף אותו.
+- אם שדה לא ידוע, כתוב "לא נקבע".
+- כתוב בעברית מקצועית, טון ברור וענייני.
+${participants?`- משתתפים ידועים: ${participants}.`:''}
+
+החזר אך ורק JSON תקין, ללא טקסט נוסף, במבנה הבא:
+{
+  "summary": "תקציר קצר של עיקרי הדיון, 2-4 משפטים",
+  "decisions": ["החלטה 1", "החלטה 2"],
+  "open_items": ["נושא פתוח 1"],
+  "red_flags": ["סיכון/דגל 1"],
+  "tasks": [{"task":"תיאור המשימה","owner":"שם האחראי או לא נקבע","due":"תאריך יעד או לא נקבע"}]
+}
+
+התמלול:
+"""
+${txt}
+"""`;
+}
+
+// Calls the selected provider and returns the same shape as summarize().
+async function summarizeWithAI(txt, cfg){
+  const participants = (document.getElementById('mtg-parts').value||'').trim();
+  const prompt = buildAIPrompt(txt, participants);
+  let raw;
+
+  if(cfg.def.type==='openai'){
+    const r = await fetch(cfg.def.url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+cfg.key },
+      body: JSON.stringify({ model:cfg.model, messages:[{role:'system',content:'החזר JSON בלבד.'},{role:'user',content:prompt}], temperature:0.2 })
+    });
+    if(!r.ok) throw new Error('שגיאת '+cfg.def.label+' ('+r.status+'): '+(await r.text()).slice(0,200));
+    const d = await r.json();
+    raw = d.choices?.[0]?.message?.content || '';
+  }
+  else if(cfg.def.type==='gemini'){
+    const url = `${cfg.def.url}/${cfg.model}:generateContent?key=${encodeURIComponent(cfg.key)}`;
+    const r = await fetch(url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{ responseMimeType:'application/json', temperature:0.2 } })
+    });
+    if(!r.ok) throw new Error('שגיאת Gemini ('+r.status+'): '+(await r.text()).slice(0,200));
+    const d = await r.json();
+    raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+  else if(cfg.def.type==='anthropic'){
+    const r = await fetch(cfg.def.url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-api-key':cfg.key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:cfg.model, max_tokens:1500, messages:[{role:'user',content:prompt}] })
+    });
+    if(!r.ok) throw new Error('שגיאת Anthropic ('+r.status+'): '+(await r.text()).slice(0,200));
+    const d = await r.json();
+    raw = d.content?.[0]?.text || '';
+  }
+  else throw new Error('סוג ספק לא נתמך');
+
+  // Extract JSON (strip code fences / surrounding text)
+  let jsonStr = raw.trim().replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
+  const a=jsonStr.indexOf('{'), b=jsonStr.lastIndexOf('}');
+  if(a>=0 && b>a) jsonStr = jsonStr.slice(a,b+1);
+  const obj = JSON.parse(jsonStr);
+
+  // Normalize to the expected shape; merge manual markers.
+  const decisions = Array.isArray(obj.decisions)?obj.decisions.map(String):[];
+  const redFlags  = Array.isArray(obj.red_flags)?obj.red_flags.map(String):[];
+  const openItems = Array.isArray(obj.open_items)?obj.open_items.map(String):[];
+  const tasks = Array.isArray(obj.tasks)?obj.tasks.map(t=>({ task:String(t.task||t.description||''), owner:String(t.owner||'לא נקבע')||'לא נקבע', due:String(t.due||'לא נקבע')||'לא נקבע' })).filter(t=>t.task):[];
+  S.markers.forEach(m=>{ if(m.icon==='✅') decisions.push(`[${m.time}] ${m.label}`); if(m.icon==='🚩') redFlags.push(`[${m.time}] ${m.label}`); });
+  return { summary:String(obj.summary||'').trim()||'הופק סיכום AI.', decisions, open_items:openItems, red_flags:redFlags, tasks, _ai:true };
+}
+/* ═══════════════ END AI ENGINE ═══════════════ */
+
 
 // WAVEFORM
 function buildWave(){const w=document.getElementById('waveform');w.innerHTML='';for(let i=0;i<40;i++){const b=document.createElement('div');b.className='wb';b.style.height='4px';w.appendChild(b);}}
@@ -394,8 +570,32 @@ function mark(icon,label){
 async function process(txt){
   document.getElementById('rec-card').style.display='none';
   document.getElementById('controls-row').style.display='none';
+  document.getElementById('ai-card').style.display='none';
   document.getElementById('proc').style.display='block';
   document.getElementById('results').style.display='none';
+
+  const aiCfg = getAIConfig();
+  if(aiCfg){
+    setProc(30,'שולח ל-'+aiCfg.def.label+'...','מפיק סיכום חכם'); await sleep(200);
+    setProc(70,'ממתין לתשובת המנוע...','ניתוח התמלול');
+    try{
+      const sum = await summarizeWithAI(txt, aiCfg);
+      setProc(100,'הושלם!',''); await sleep(300);
+      showResults(txt, sum);
+      notif('✓ סיכום הופק באמצעות '+aiCfg.def.label,'s');
+      return;
+    }catch(err){
+      console.error('[AI] summary failed:', err);
+      notif('סיכום AI נכשל — עובר לסיכום מקומי','e');
+      setProc(60,'סיכום AI נכשל','משתמש בסיכום מקומי'); await sleep(500);
+      const sum = summarize(txt);
+      sum.summary = '⚠️ סיכום AI נכשל ('+(err.message||'שגיאה').slice(0,120)+'). להלן סיכום מקומי:\n\n' + sum.summary;
+      setProc(100,'הושלם!',''); await sleep(300);
+      showResults(txt, sum);
+      return;
+    }
+  }
+
   setProc(25,'מנתח תמלול...','מזהה משפטי החלטה'); await sleep(600);
   setProc(60,'מחלץ משימות...','אחראים ותאריכים'); await sleep(600);
   setProc(90,'מזהה סיכונים...','דגלים אדומים'); await sleep(400);
@@ -464,7 +664,7 @@ function showResults(txt,sum){
     <p><strong>נדרש אימות אנושי</strong> — בדוק לפני הפצה.</p>
     <button class="ab ap" onclick="approve(this)">✅ אשר והפץ</button></div>
   <div class="res-hdr"><h2>סיכום פגישה</h2><span class="mtag">${esc(name)}</span></div>
-  <div class="res-meta"><span class="chip">${now}</span><span class="chip">⏱ ${dur}</span><span class="chip g">✓ תומלל</span>${S.markers.length?`<span class="chip">${S.markers.length} סימונים</span>`:''}</div>
+  <div class="res-meta"><span class="chip">${now}</span><span class="chip">⏱ ${dur}</span><span class="chip g">✓ תומלל</span>${sum._ai?`<span class="chip g">🤖 סיכום AI</span>`:''}${S.markers.length?`<span class="chip">${S.markers.length} סימונים</span>`:''}</div>
   <div class="actions">
     <button class="ab" onclick="copySum()">📋 העתק</button>
     <button class="ab" onclick="dlTxt()">⬇ הורד TXT</button>
@@ -494,7 +694,7 @@ function approve(btn){const bar=document.querySelector('.approve-bar');if(bar){b
 function toggleTr(btn){const el=document.getElementById('tr-full');el.classList.toggle('open');btn.querySelector('span:last-child').textContent=el.classList.contains('open')?'▲':'▼';btn.querySelector('span:first-child').textContent=el.classList.contains('open')?'הסתר':'הצג תמלול מלא';}
 function copySum(){if(!window._sum)return;const s=window._sum;let t=`סיכום — ${window._name}\n\n`;if(s.summary)t+=`${s.summary}\n\n`;if(s.decisions.length)t+=`החלטות:\n${s.decisions.map((d,i)=>`${i+1}. ${d}`).join('\n')}\n\n`;if(s.tasks.length){t+=`משימות:\n`;s.tasks.forEach(x=>t+=`• ${x.task} | ${x.owner} | ${x.due}\n`);}navigator.clipboard.writeText(t).then(()=>notif('הועתק','s'));}
 function dlTxt(){if(!window._txt)return;const s=window._sum||{};let t=`סיכום פגישה — ${window._name}\n${new Date().toLocaleDateString('he-IL')}\n\n`;if(s.summary)t+=`סיכום:\n${s.summary}\n\n`;if(s.decisions.length)t+=`החלטות:\n${s.decisions.map((d,i)=>`${i+1}. ${d}`).join('\n')}\n\n`;if(s.tasks.length){t+=`משימות:\n`;s.tasks.forEach(x=>t+=`${x.task} | ${x.owner} | ${x.due}\n`);t+='\n';}t+=`תמלול מלא:\n${window._txt}`;const b=new Blob([t],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`${window._name}_סיכום.txt`;a.click();notif('הורד','s');}
-function newRec(){S.fullText='';S.markers=[];document.getElementById('rec-timer').textContent='00:00';document.getElementById('mlog').innerHTML='<div class="mlog-empty">סימונים יופיעו כאן</div>';document.getElementById('results').style.display='none';document.getElementById('proc').style.display='none';document.getElementById('rec-card').style.display='block';document.getElementById('controls-row').style.display='grid';document.getElementById('mtg-name').value='';document.getElementById('mtg-parts').value='';document.getElementById('live-preview').style.display='none';resetRecUI();document.getElementById('rec-hint').textContent='המערכת תקליט את הפגישה. בסיום — תוצג התמלול והסיכום.';window._txt=null;window._sum=null;}
+function newRec(){S.fullText='';S.markers=[];document.getElementById('rec-timer').textContent='00:00';document.getElementById('mlog').innerHTML='<div class="mlog-empty">סימונים יופיעו כאן</div>';document.getElementById('results').style.display='none';document.getElementById('proc').style.display='none';document.getElementById('rec-card').style.display='block';document.getElementById('controls-row').style.display='grid';document.getElementById('ai-card').style.display='block';document.getElementById('mtg-name').value='';document.getElementById('mtg-parts').value='';document.getElementById('live-preview').style.display='none';resetRecUI();document.getElementById('rec-hint').textContent='המערכת תקליט את הפגישה. בסיום — תוצג התמלול והסיכום.';window._txt=null;window._sum=null;}
 
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function showLive(txt){const el=document.getElementById('live-preview');el.style.display='block';el.textContent=txt;el.scrollTop=el.scrollHeight;}
@@ -502,6 +702,7 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 let _nt;function notif(m,t='i'){document.querySelectorAll('.notif').forEach(n=>n.remove());clearTimeout(_nt);const e=document.createElement('div');e.className=`notif ${t}`;e.textContent=m;document.body.appendChild(e);_nt=setTimeout(()=>e.remove(),3000);}
 
 buildWave();
+initAIUI();
 </script>
 </body>
 </html>
