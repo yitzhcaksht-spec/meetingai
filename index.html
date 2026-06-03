@@ -281,8 +281,12 @@ async function startRec(){
   const rec = new SR();
   rec.lang='he-IL'; rec.continuous=true; rec.interimResults=true; rec.maxAlternatives=1;
   S.recognition=rec; S.fullText=''; S.markers=[]; S.rec=true;
-  let final='';
-  let lastInterim='';   // remember interim in case restart happens before it finalizes
+  // Persistent store of every finalized sentence. Lives on S so it survives
+  // the many automatic restarts Chrome performs during a long meeting.
+  S.segments=[];
+  let lastInterim='';   // current interim (not yet finalized)
+
+  const joinSegments = () => S.segments.join(' ');
 
   rec.onstart = () => {
     document.getElementById('rec-status').textContent='● מקליט — מאזין...';
@@ -293,12 +297,16 @@ async function startRec(){
     let interim = '';
     for(let i=ev.resultIndex;i<ev.results.length;i++){
       const t = ev.results[i][0].transcript;
-      if(ev.results[i].isFinal){ final += t.trim() + '. '; lastInterim=''; }
-      else interim += t;
+      if(ev.results[i].isFinal){
+        const clean = t.trim();
+        if(clean) S.segments.push(/[.!?]$/.test(clean) ? clean : clean + '.');
+      } else {
+        interim += t;
+      }
     }
     lastInterim = interim;
-    S.fullText = final;
-    showLive((final + interim).trim() || '...');
+    S.fullText = joinSegments();
+    showLive((joinSegments() + ' ' + interim).trim() || '...');
   };
 
   rec.onerror = ev => {
@@ -313,12 +321,13 @@ async function startRec(){
   rec.onend = () => {
     if(S.rec){
       // salvage any interim that didn't finalize before the stop
-      if(lastInterim.trim()){ final += lastInterim.trim() + '. '; lastInterim=''; S.fullText = final; }
+      const li = lastInterim.trim();
+      if(li){ S.segments.push(/[.!?]$/.test(li) ? li : li + '.'); lastInterim=''; S.fullText = joinSegments(); }
       try{ rec.start(); }catch(e){ setTimeout(()=>{ if(S.rec){ try{rec.start();}catch(e2){} } }, 150); }
     }
   };
 
-  S._getFinal = () => (final + ' ' + lastInterim).trim();
+  S._getFinal = () => (joinSegments() + ' ' + lastInterim).trim();
 
   try{ rec.start(); }catch(e){ notif('שגיאה בהפעלה','e'); S.rec=false; return; }
 
@@ -410,7 +419,16 @@ function summarize(txt){
   S.markers.forEach(m=>{ if(m.icon==='✅') decisions.push(`[${m.time}] ${m.label}`); if(m.icon==='🚩') redFlags.push(`[${m.time}] ${m.label}`); });
   const parts=(document.getElementById('mtg-parts').value||'').split(/[,،]/).map(p=>p.trim()).filter(Boolean);
   const tasks=tasksS.map(s=>({task:s.length>90?s.slice(0,90)+'...':s,owner:parts.find(p=>s.includes(p))||'לא נקבע',due:extractDate(s)||'לא נקבע'}));
-  const summary = sents.slice(0,3).join('. ') + (sents.length?'.':'') + (sents.length>3?` (${sents.length} משפטים תומללו)`:'');
+  // Build a genuine overview — NOT a copy of the transcript opening.
+  // Reports what was found, without inventing content.
+  const counts=[];
+  if(decisions.length) counts.push(`${decisions.length} החלטות`);
+  if(tasks.length) counts.push(`${tasks.length} משימות`);
+  if(openItems.length) counts.push(`${openItems.length} נושאים פתוחים`);
+  if(redFlags.length) counts.push(`${redFlags.length} דגלים אדומים`);
+  const summary = sents.length
+    ? `בדיון תומללו ${sents.length} משפטים. זוהו: ${counts.length ? counts.join(', ') : 'ללא פריטים מובחנים'}.`
+    : 'לא תומלל תוכן בדיון.';
   return { summary, decisions, open_items:openItems, red_flags:redFlags, tasks };
 }
 function extractDate(s){const ps=[/עד (ה?-?\d{1,2}([./]\d{1,2})?)/,/(היום|מחר|השבוע|סוף השבוע|בהקדם)/,/(\d{1,2}[./]\d{1,2}([./]\d{2,4})?)/,/(ראשון|שני|שלישי|רביעי|חמישי|שישי)/];for(const p of ps){const m=s.match(p);if(m)return m[1]||m[0];}return null;}
