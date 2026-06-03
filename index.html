@@ -384,6 +384,7 @@ async function summarizeWithAI(txt, cfg){
   const participants = (document.getElementById('mtg-parts').value||'').trim();
   const prompt = buildAIPrompt(txt, participants);
   let raw;
+  const aiErr = (status, body) => { const e=new Error('שגיאת '+cfg.def.label+' ('+status+'): '+String(body).slice(0,200)); e.status=status; return e; };
 
   if(cfg.def.type==='openai'){
     const r = await fetch(cfg.def.url, {
@@ -391,7 +392,7 @@ async function summarizeWithAI(txt, cfg){
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+cfg.key },
       body: JSON.stringify({ model:cfg.model, messages:[{role:'system',content:'החזר JSON בלבד.'},{role:'user',content:prompt}], temperature:0.2 })
     });
-    if(!r.ok) throw new Error('שגיאת '+cfg.def.label+' ('+r.status+'): '+(await r.text()).slice(0,200));
+    if(!r.ok) throw aiErr(r.status, await r.text());
     const d = await r.json();
     raw = d.choices?.[0]?.message?.content || '';
   }
@@ -402,7 +403,7 @@ async function summarizeWithAI(txt, cfg){
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{ responseMimeType:'application/json', temperature:0.2 } })
     });
-    if(!r.ok) throw new Error('שגיאת Gemini ('+r.status+'): '+(await r.text()).slice(0,200));
+    if(!r.ok) throw aiErr(r.status, await r.text());
     const d = await r.json();
     raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
@@ -412,7 +413,7 @@ async function summarizeWithAI(txt, cfg){
       headers:{ 'Content-Type':'application/json', 'x-api-key':cfg.key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
       body: JSON.stringify({ model:cfg.model, max_tokens:1500, messages:[{role:'user',content:prompt}] })
     });
-    if(!r.ok) throw new Error('שגיאת Anthropic ('+r.status+'): '+(await r.text()).slice(0,200));
+    if(!r.ok) throw aiErr(r.status, await r.text());
     const d = await r.json();
     raw = d.content?.[0]?.text || '';
   }
@@ -431,6 +432,26 @@ async function summarizeWithAI(txt, cfg){
   const tasks = Array.isArray(obj.tasks)?obj.tasks.map(t=>({ task:String(t.task||t.description||''), owner:String(t.owner||'לא נקבע')||'לא נקבע', due:String(t.due||'לא נקבע')||'לא נקבע' })).filter(t=>t.task):[];
   S.markers.forEach(m=>{ if(m.icon==='✅') decisions.push(`[${m.time}] ${m.label}`); if(m.icon==='🚩') redFlags.push(`[${m.time}] ${m.label}`); });
   return { summary:String(obj.summary||'').trim()||'הופק סיכום AI.', decisions, open_items:openItems, red_flags:redFlags, tasks, _ai:true };
+}
+
+// Auto-retry on transient errors (rate limit / server overload). Permanent
+// errors (bad key, model not found) fail immediately — no point retrying.
+const AI_TRANSIENT = [429,500,502,503,504];
+async function summarizeWithAIRetry(txt, cfg, onRetry){
+  let lastErr;
+  for(let attempt=1; attempt<=3; attempt++){
+    try{ return await summarizeWithAI(txt, cfg); }
+    catch(e){
+      lastErr = e;
+      if(attempt < 3 && AI_TRANSIENT.includes(e.status)){
+        if(onRetry) onRetry(attempt, e);
+        await sleep(1500 * attempt);   // 1.5s, then 3s
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
 }
 /* ═══════════════ END AI ENGINE ═══════════════ */
 
@@ -576,22 +597,21 @@ async function process(txt){
 
   const aiCfg = getAIConfig();
   if(aiCfg){
-    setProc(30,'שולח ל-'+aiCfg.def.label+'...','מפיק סיכום חכם'); await sleep(200);
+    S._pendingTxt = txt;   // keep transcript so we can retry without re-recording
+    setProc(30,'שולח ל-'+aiCfg.def.label+'...','מפיק סיכום חכם'); await sleep(150);
     setProc(70,'ממתין לתשובת המנוע...','ניתוח התמלול');
     try{
-      const sum = await summarizeWithAI(txt, aiCfg);
-      setProc(100,'הושלם!',''); await sleep(300);
+      const sum = await summarizeWithAIRetry(txt, aiCfg, (attempt)=>{
+        setProc(50,'המנוע עמוס — מנסה שוב ('+attempt+'/2)...','ניסיון חוזר אוטומטי');
+      });
+      setProc(100,'הושלם!',''); await sleep(250);
       showResults(txt, sum);
       notif('✓ סיכום הופק באמצעות '+aiCfg.def.label,'s');
       return;
     }catch(err){
       console.error('[AI] summary failed:', err);
-      notif('סיכום AI נכשל — עובר לסיכום מקומי','e');
-      setProc(60,'סיכום AI נכשל','משתמש בסיכום מקומי'); await sleep(500);
-      const sum = summarize(txt);
-      sum.summary = '⚠️ סיכום AI נכשל ('+(err.message||'שגיאה').slice(0,120)+'). להלן סיכום מקומי:\n\n' + sum.summary;
-      setProc(100,'הושלם!',''); await sleep(300);
-      showResults(txt, sum);
+      notif('סיכום AI נכשל','e');
+      showAIError(txt, err);
       return;
     }
   }
@@ -602,6 +622,29 @@ async function process(txt){
   setProc(100,'הושלם!',''); await sleep(400);
   showResults(txt, summarize(txt));
 }
+
+// Recovery screen when AI fails — retry, change engine/model, or use local.
+function showAIError(txt, err){
+  S._pendingTxt = txt;
+  document.getElementById('proc').style.display='none';
+  document.getElementById('ai-card').style.display='block';   // allow editing engine/model
+  const transient = AI_TRANSIENT.includes(err.status);
+  const panel=document.getElementById('results'); panel.style.display='block';
+  panel.innerHTML = `<div class="rs"><h3><span>⚠️</span> סיכום AI נכשל</h3>
+    <div class="box" style="color:var(--amber);line-height:1.7">${esc(err.message||'שגיאה לא ידועה')}</div>
+    <p style="font-size:13px;color:var(--muted);margin:14px 0;line-height:1.7">${transient?'המנוע עמוס כרגע. אפשר לנסות שוב מיד, לעבור למודל קליל יותר (למשל gemini-2.5-flash-lite) בכרטיס "סיכום חכם" למעלה, או להשתמש בסיכום המקומי.':'אפשר לנסות שוב, לבחור מנוע או מודל אחר בכרטיס "סיכום חכם" למעלה ואז לנסות שוב, או להשתמש בסיכום המקומי. התמלול נשמר.'}</p>
+    <div class="actions">
+      <button class="ab ap" onclick="retryAISummary()">🔄 שלח שוב</button>
+      <button class="ab" onclick="scrollToAISettings()">⚙️ שנה מנוע / מודל</button>
+      <button class="ab" onclick="useLocalSummary()">📝 סיכום מקומי</button>
+    </div>
+    <div class="rs" style="margin-top:18px"><h3><span>📄</span> תמלול מלא (נשמר)</h3><div class="box" style="white-space:pre-wrap;max-height:200px;overflow-y:auto">${esc(txt)}</div></div>
+  </div>`;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function retryAISummary(){ if(S._pendingTxt) process(S._pendingTxt); }
+function scrollToAISettings(){ document.getElementById('ai-card').scrollIntoView({behavior:'smooth',block:'center'}); notif('שנה מנוע/מודל ולחץ "שמור", ואז "שלח שוב"','i'); }
+function useLocalSummary(){ if(S._pendingTxt) showResults(S._pendingTxt, summarize(S._pendingTxt)); }
 function setProc(pct,t,d){document.getElementById('proc-t').textContent=t;document.getElementById('proc-d').textContent=d;document.getElementById('prog').style.width=pct+'%';}
 
 // SUMMARIZER
