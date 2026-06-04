@@ -1,6 +1,6 @@
 cd /workspaces/meetingai
 git add index.html
-git commit -m "v1.1: About page, user guide, changelog, future roadmap with meeting bot"
+git commit -m "Fix stray script tag that leaked history code as text"
 git push<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -367,7 +367,6 @@ function renderChangelog(){
   </div>`).join('');
 }
 renderChangelog();
-</script>
 const HIST_LS='sumit_history';
 function loadHistory(){ try{ return JSON.parse(localStorage.getItem(HIST_LS)||'[]'); }catch(e){ return []; } }
 function saveHistory(arr){ try{ localStorage.setItem(HIST_LS, JSON.stringify(arr)); }catch(e){ notif('שמירה מקומית נכשלה','e'); } }
