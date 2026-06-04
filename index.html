@@ -1,4 +1,7 @@
-<!DOCTYPE html>
+cd /workspaces/meetingai
+git add index.html
+git commit -m "v1.1: About page, user guide, changelog, future roadmap with meeting bot"
+git push<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -163,6 +166,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('app',this)">הקלטה</button>
     <button class="nav-tab" onclick="showPage('history',this);renderHistory()">פגישות קודמות</button>
+    <button class="nav-tab" onclick="showPage('about',this)">אודות ומדריך</button>
   </div>
   <span class="nav-badge">חברת החשמל ישראל</span>
 </nav>
@@ -195,6 +199,30 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
     <div class="ctrl-card" id="ai-card" style="margin-bottom:24px">
       <h4>סיכום חכם (AI) — אופציונלי</h4>
       <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;line-height:1.6">הזן מפתח API משלך כדי שהסיכום יופק על ידי מנוע AI במקום הסיכום המקומי. ללא מפתח — המערכת משתמשת בסיכום המקומי.</p>
+
+      <details style="margin-bottom:16px;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:0">
+        <summary style="cursor:pointer;padding:12px 14px;font-size:13px;font-weight:600;color:var(--blue);list-style:none">❓ לא יודע מה זה מפתח API ואיך משיגים אחד? לחץ כאן</summary>
+        <div style="padding:0 16px 16px;font-size:13px;color:var(--text);line-height:1.75">
+          <p style="margin:8px 0"><strong>מה זה מפת API?</strong> זהו קוד אישי וסודי (כמו סיסמה) שמזהה אותך מול שירות ה-AI ומאפשר לאפליקציה לשלוח אליו בקשות בשמך. השימוש מתומחר לפי כמות — לרוב בסכומים קטנים, ול-Gemini יש שכבה חינמית נדיבה.</p>
+          <p style="margin:12px 0 6px"><strong>איך משיגים, צעד-צעד:</strong></p>
+          <ol style="margin:0;padding-inline-start:20px">
+            <li>בחר מנוע מהרשימה למטה (למתחילים מומלץ <strong>Google Gemini</strong> — חינמי).</li>
+            <li>לחץ על הקישור "🔗 הפקת מפתח API" שמופיע מתחת לבחירת המנוע — הוא ייקח אותך לעמוד הנכון.</li>
+            <li>בעמוד הספק: התחבר/הירשם, לחץ על כפתור כמו "Create API key", והעתק את המפתח שמתקבל.</li>
+            <li>חזור לכאן, הדבק את המפתח בשדה "מפתח API", ולחץ "שמור".</li>
+          </ol>
+          <p style="margin:12px 0 6px"><strong>היכן מפיקים, לפי מנוע:</strong></p>
+          <ul style="margin:0;padding-inline-start:20px;line-height:2">
+            <li><strong>Google Gemini</strong> (חינמי) — aistudio.google.com/apikey</li>
+            <li><strong>OpenAI (GPT)</strong> — platform.openai.com/api-keys · דרוש לתמלול קבצים/פגישות וירטואליות</li>
+            <li><strong>Anthropic (Claude)</strong> — console.anthropic.com/settings/keys</li>
+            <li><strong>Groq</strong> (מהיר, חינמי) — console.groq.com/keys</li>
+            <li><strong>Mistral / DeepSeek / Together / OpenRouter</strong> — בעמוד ה-API של כל ספק</li>
+          </ul>
+          <p style="margin:12px 0 0;font-size:12px;color:var(--amber)">⚠️ המפתח אישי — אל תשתף אותו עם אחרים. כאן הוא נשמר במחשב שלך בלבד (מקודד), ואינו מתאים למפתח ארגוני רגיש.</p>
+        </div>
+      </details>
+
       <div class="fl"><label>מנוע AI</label>
         <select id="ai-provider" onchange="onProviderChange()"></select>
         <a id="ai-keylink" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:12px;color:var(--blue);text-decoration:none">🔗 הפקת מפתח API למנוע זה</a>
@@ -261,8 +289,85 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
   </div>
 </div>
 
+<div id="page-about" class="page">
+  <div class="mhero">
+    <h1>SUMIT — אודות ומדריך</h1>
+    <p>מערכת תמלול וסיכום פגישות · חברת החשמל</p>
+  </div>
+  <div class="app-wrap">
+    <div class="ctrl-card" style="margin-bottom:20px">
+      <h4>מה המערכת עושה</h4>
+      <p style="font-size:13.5px;color:var(--text);line-height:1.8;margin-top:8px">SUMIT מקליטה פגישה, מתמללת אותה לעברית, ומפיקה סיכום מסודר הכולל סקירה כללית, החלטות, נושאים פתוחים, דגלים וטבלת משימות (משימה · אחראי · תאריך יעד). הסיכום מופק מקומית בדפדפן, או — אם הוזן מפתח API — על ידי מנוע AI איכותי יותר. ניתן לייצא את התוצאה ל-Word, מצגת ו-TXT, ולשמור היסטוריית פגישות במחשב. עיקרון מנחה: <strong>אפס המצאה</strong> — המערכת מסכמת רק את מה שנאמר בפועל.</p>
+    </div>
+
+    <div class="ctrl-card" style="margin-bottom:20px">
+      <h4>מדריך למשתמש</h4>
+      <div style="font-size:13.5px;color:var(--text);line-height:1.85;margin-top:8px">
+        <p><strong>פגישה פיזית (כולם בחדר):</strong> מלא שם פגישה ומשתתפים, לחץ על כפתור המיקרופון, דבר, ובסיום לחץ לעצירה. התמלול והסיכום יוצגו אוטומטית.</p>
+        <p style="margin-top:10px"><strong>פגישה וירטואלית (Zoom/Teams עם אוזניות):</strong> הזן מפתח OpenAI בכרטיס "סיכום חכם", סמן "פגישה וירטואלית", התחל הקלטה ושתף <strong>לשונית עם שמע</strong>. בסיום, המערכת מתמללת את כל הדוברים דרך Whisper.</p>
+        <p style="margin-top:10px"><strong>יש לך כבר הקלטה?</strong> השתמש בכרטיס "העלה לתמלול" (דורש מפתח OpenAI).</p>
+        <p style="margin-top:10px"><strong>סיכום חכם (AI):</strong> בחר מנוע, הפק מפתח דרך הקישור, הדבק ושמור. ללא מפתח — סיכום מקומי. מי שלא מכיר מפתחות API — יש מדריך מתקפל בכרטיס עצמו.</p>
+        <p style="margin-top:10px"><strong>ייצוא והיסטוריה:</strong> במסך התוצאות אפשר להוריד Word / מצגת / TXT / הקלטת שמע. כל סיכום נשמר אוטומטית בלשונית "פגישות קודמות" (טקסט בלבד, מקומי — הקלטות שמע אינן נשמרות).</p>
+      </div>
+    </div>
+
+    <div class="ctrl-card" style="margin-bottom:20px">
+      <h4>מגבלות שחשוב להכיר</h4>
+      <ul style="font-size:13px;color:var(--muted);line-height:1.9;margin:8px 0 0;padding-inline-start:20px">
+        <li>תמלול חי מסתמך על מנוע הדפדפן (Google) ויציב בעיקר ב-Chrome במחשב; ייתכנו הפסקות קצרות בהקלטות ארוכות.</li>
+        <li>תמלול חי קולט רק את המיקרופון — לא דוברים שנשמעים באוזניות. לכן לפגישה וירטואלית יש להשתמש במצב "פגישה וירטואלית" (Whisper).</li>
+        <li>תמלול דרך Whisper ושימוש ב-AI שולחים נתונים לספק החיצוני — לא מתאים למידע ארגוני רגיש ללא אישור.</li>
+        <li>שמירה והיסטוריה הן מקומיות בדפדפן זה בלבד.</li>
+      </ul>
+    </div>
+
+    <div class="ctrl-card" style="margin-bottom:20px">
+      <h4>מפת דרכים — פיתוח עתידי (מעבר ל-MVP)</h4>
+      <p style="font-size:12.5px;color:var(--muted);margin:8px 0 10px;line-height:1.6">יכולות שנשקלות לשלב הבא. הן דורשות שרת ייעודי, אינטגרציות ואישורי אבטחה ארגוניים — ולכן אינן חלק מה-MVP הנוכחי שרץ בדפדפן בלבד.</p>
+      <ul style="font-size:13px;color:var(--text);line-height:1.9;margin:0;padding-inline-start:20px">
+        <li><strong>בוט שמצטרף לפגישה אוטומטית</strong> — שליחת זימון לבוט שמצטרף ל-Zoom/Teams/Webex, מקליט ומתמלל ללא נוכחות אדם. דורש שרת קבוע, SDK רשמי לכל פלטפורמה, חשבון בוט מאומת והסכמת משתתפים.</li>
+        <li><strong>מנוע תמלול ארגוני יציב</strong> — Whisper/ivrit.ai על שרת פנימי, לתמלול אמין שאינו תלוי במנוע הדפדפן ואינו מוציא מידע החוצה.</li>
+        <li><strong>היסטוריה משותפת וגישה מכל מחשב</strong> — אחסון מרכזי מאובטח במקום שמירה מקומית בדפדפן.</li>
+        <li><strong>אינטגרציות</strong> — ייצוא משימות ל-Monday/Jira, שליחת סיכום לאחר אישור ידני.</li>
+      </ul>
+    </div>
+
+    <div class="ctrl-card">
+      <h4>יומן גרסאות</h4>
+      <div id="changelog" style="margin-top:10px"></div>
+    </div>
+  </div>
+</div>
+
 <script>
-/* ═══════════ MEETING HISTORY (local only) ═══════════ */
+/* ═══════════ CHANGELOG ═══════════ */
+// Add a new entry at the TOP for every meaningful version.
+const CHANGELOG=[
+  { v:'1.1', date:'יוני 2026', items:[
+    'נוסף עמוד "אודות ומדריך" עם מדריך למשתמש ויומן גרסאות',
+    'נוספה מפת דרכים לפיתוח עתידי (כולל בוט שמצטרף לפגישה)',
+    'מדריך מובנה למשתמשים חדשים על מפתחות API',
+  ]},
+  { v:'1.0', date:'יוני 2026', items:[
+    'השקה ראשונה: הקלטה, תמלול עברית וסיכום מקומי',
+    'סיכום AI רב-מנועי (OpenAI, Gemini, Claude, Groq, Mistral, DeepSeek, Together, OpenRouter) עם ניסיון חוזר אוטומטי ומסך התאוששות',
+    'מצב פגישה וירטואלית — קליטת כל הדוברים דרך שמע מערכת ותמלול Whisper',
+    'העלאת הקלטה קיימת לתמלול',
+    'ייצוא ל-Word, מצגת מעוצבת (AI) ו-TXT; הורדת הקלטת שמע',
+    'לשונית "פגישות קודמות" — שמירה מקומית של סיכומים',
+    'שיפור זיהוי משימות/אחראים/תאריכים בעברית, סיכום מפורט יותר, וניקוי תמלול אוטומטי',
+    'אבטחת מפתח API (קידוד מקומי) ומדריך מובנה למשתמש',
+  ]},
+];
+function renderChangelog(){
+  const box=document.getElementById('changelog'); if(!box) return;
+  box.innerHTML=CHANGELOG.map(c=>`<div style="margin-bottom:16px">
+    <div style="font-size:14px;font-weight:700;color:var(--blue)">גרסה ${c.v} <span style="font-weight:400;color:var(--muted);font-size:12px">· ${c.date}</span></div>
+    <ul style="font-size:13px;color:var(--text);line-height:1.8;margin:6px 0 0;padding-inline-start:20px">${c.items.map(i=>`<li>${i}</li>`).join('')}</ul>
+  </div>`).join('');
+}
+renderChangelog();
+</script>
 const HIST_LS='sumit_history';
 function loadHistory(){ try{ return JSON.parse(localStorage.getItem(HIST_LS)||'[]'); }catch(e){ return []; } }
 function saveHistory(arr){ try{ localStorage.setItem(HIST_LS, JSON.stringify(arr)); }catch(e){ notif('שמירה מקומית נכשלה','e'); } }
