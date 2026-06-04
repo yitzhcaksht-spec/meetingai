@@ -162,7 +162,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
   <div class="nav-logo"><div class="nav-icon">⚡</div><span class="nav-name">SUMIT</span></div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('app',this)">הקלטה</button>
-    <button class="nav-tab" onclick="showPage('moscow',this)">תעדוף</button>
+    <button class="nav-tab" onclick="showPage('history',this);renderHistory()">פגישות קודמות</button>
   </div>
   <span class="nav-badge">חברת החשמל ישראל</span>
 </nav>
@@ -251,44 +251,66 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
 </div>
 
 <!-- ════ MOSCOW PAGE ════ -->
-<div id="page-moscow" class="page">
+<div id="page-history" class="page">
   <div class="mhero">
-    <h1>תעדוף יכולות<br><span>מערכת תמלול וסיכום פגישות</span></h1>
-    <p>MVP — הקלטה, תמלול וסיכום בתוך הדפדפן</p>
+    <h1>פגישות קודמות</h1>
+    <p>סיכומים ותמלולים שמורים במחשב זה בלבד — הקלטות שמע אינן נשמרות</p>
   </div>
-  <div class="mgrid">
-    <div class="msec">
-      <div class="mhead must-h"><div class="mletter">M</div><div class="mhead-t"><h3>MUST HAVE</h3><p>תנאי סף</p></div></div>
-      <div class="mitems">
-        <div class="mit"><div class="mit-top"><span>🎤</span><span class="mit-title">הקלטת פגישה</span></div><div class="mit-desc">הקלטה בלחיצה אחת. שמע In-Memory — לא נשמר לדיסק.</div></div>
-        <div class="mit"><div class="mit-top"><span>🔤</span><span class="mit-title">תמלול עברית</span></div><div class="mit-desc">תמלול אוטומטי בסיום ההקלטה, ללא כלי חיצוני.</div></div>
-        <div class="mit"><div class="mit-top"><span>📋</span><span class="mit-title">סיכום — אפס המצאה</span></div><div class="mit-desc">החלטות, נושאים פתוחים, דגלים. רק מה שנאמר.</div></div>
-        <div class="mit"><div class="mit-top"><span>📊</span><span class="mit-title">טבלת משימות</span></div><div class="mit-desc">משימה | אחראי | תאריך. שדה חסר = "לא נקבע".</div></div>
-        <div class="mit"><div class="mit-top"><span>✅</span><span class="mit-title">אימות לפני הפצה</span></div><div class="mit-desc">"אשר והפץ" — אין מסלול עוקף.</div></div>
-        <div class="mit"><div class="mit-top"><span>🔒</span><span class="mit-title">Zero Retention</span></div><div class="mit-desc">שמע נמחק מהזיכרון מיד. אין שרת חיצוני.</div></div>
-      </div>
-    </div>
-    <div class="msec">
-      <div class="mhead should-h"><div class="mletter">S</div><div class="mhead-t"><h3>SHOULD</h3><p>גרסה 1.0 / 1.1</p></div></div>
-      <div class="mitems">
-        <div class="mit"><div class="mit-top"><span>👤</span><span class="mit-title">סיכום לפי פרסונה</span></div><div class="mit-desc">נועה / אידו / רוני — תוכן מותאם תפקיד.</div></div>
-        <div class="mit"><div class="mit-top"><span>⭐</span><span class="mit-title">סימון תוך כדי הקלטה</span></div><div class="mit-desc">חשוב / סיכון / החלטה — בולטים בסיכום.</div></div>
-        <div class="mit"><div class="mit-top"><span>📤</span><span class="mit-title">ייצוא Word / PDF</span></div><div class="mit-desc">פרוטוקול בתבנית אחידה לאחר אישור.</div></div>
-        <div class="mit"><div class="mit-top"><span>🗂️</span><span class="mit-title">ארכיב פגישות</span></div><div class="mit-desc">היסטוריה + מחיקה לפי דרישה תוך 24 שעות.</div></div>
-      </div>
-      <div class="mhead could-h" style="border-top:1px solid var(--border)"><div class="mletter">C</div><div class="mhead-t"><h3>COULD</h3><p>Phase 2</p></div></div>
-      <div class="mitems">
-        <div class="mit"><div class="mit-top"><span>🔗</span><span class="mit-title">ייצוא Monday / Jira</span></div><div class="mit-desc">אינטגרציה לאחר אישור ידני.</div></div>
-        <div class="mit"><div class="mit-top"><span>🤖</span><span class="mit-title">תמלול מנוע מקצועי</span></div><div class="mit-desc">Whisper / ivrit.ai — דיוק גבוה (בתשלום).</div></div>
-      </div>
-      <div class="mhead wont-h" style="border-top:1px solid var(--border)"><div class="mletter">W</div><div class="mhead-t"><h3>WON'T — v1.0</h3><p>מחוץ לתחום</p></div></div>
-      <div class="mitems">
-        <div class="mit"><div class="mit-top"><span>🚫</span><span class="mit-title">מייל אוטומטי</span></div><div class="mit-desc">אסור — הפצה ידנית בלבד.</div></div>
-        <div class="mit"><div class="mit-top"><span>🚫</span><span class="mit-title">בוט / API Webex</span></div><div class="mit-desc">המערכת מקליטה ישירות.</div></div>
-      </div>
-    </div>
+  <div class="app-wrap">
+    <div id="history-list"></div>
   </div>
 </div>
+
+<script>
+/* ═══════════ MEETING HISTORY (local only) ═══════════ */
+const HIST_LS='sumit_history';
+function loadHistory(){ try{ return JSON.parse(localStorage.getItem(HIST_LS)||'[]'); }catch(e){ return []; } }
+function saveHistory(arr){ try{ localStorage.setItem(HIST_LS, JSON.stringify(arr)); }catch(e){ notif('שמירה מקומית נכשלה','e'); } }
+// Save a finished meeting (text only — never audio).
+function saveMeeting(name, txt, sum){
+  const arr=loadHistory();
+  arr.unshift({ id:Date.now(), name:name||'פגישה', date:new Date().toLocaleString('he-IL'), txt, sum });
+  if(arr.length>50) arr.length=50;   // cap local storage
+  saveHistory(arr);
+}
+function deleteMeeting(id){
+  if(!confirm('למחוק את הפגישה לצמיתות?')) return;
+  saveHistory(loadHistory().filter(m=>m.id!==id));
+  renderHistory();
+  notif('הפגישה נמחקה','s');
+}
+function clearHistory(){
+  if(!confirm('למחוק את כל הפגישות השמורות?')) return;
+  saveHistory([]); renderHistory(); notif('ההיסטוריה נוקתה','s');
+}
+// Re-download a saved meeting as Word / pptx by loading it into window._* and reusing the exporters.
+function reload(id){ const m=loadHistory().find(x=>x.id===id); if(!m) return; window._txt=m.txt; window._sum=m.sum; window._name=m.name; }
+function histDocx(id){ reload(id); dlDocx(); }
+function histPptx(id){ reload(id); dlPptx(); }
+function histTxt(id){ reload(id); dlTxt(); }
+function renderHistory(){
+  const arr=loadHistory(); const box=document.getElementById('history-list');
+  if(!arr.length){ box.innerHTML='<div class="ctrl-card" style="text-align:center;color:var(--muted)">אין עדיין פגישות שמורות. סיכומים שתפיק יישמרו כאן אוטומטית (במחשב זה בלבד).</div>'; return; }
+  let h=`<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="ab" onclick="clearHistory()">🗑 נקה הכל</button></div>`;
+  arr.forEach(m=>{
+    const tasks=(m.sum&&m.sum.tasks)?m.sum.tasks.length:0;
+    const dec=(m.sum&&m.sum.decisions)?m.sum.decisions.length:0;
+    h+=`<div class="ctrl-card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div><h4 style="margin:0">${esc(m.name)}</h4><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(m.date)} · ${dec} החלטות · ${tasks} משימות</div></div>
+      </div>
+      <div style="font-size:13px;color:var(--text);line-height:1.6;margin:12px 0;max-height:120px;overflow-y:auto">${esc((m.sum&&m.sum.summary)||'').replace(/\n/g,'<br>')}</div>
+      <div class="actions">
+        <button class="ab" onclick="histTxt(${m.id})">⬇ TXT</button>
+        <button class="ab" onclick="histDocx(${m.id})">📄 Word</button>
+        <button class="ab" onclick="histPptx(${m.id})">📊 מצגת</button>
+        <button class="ab" onclick="deleteMeeting(${m.id})">🗑 מחק</button>
+      </div>
+    </div>`;
+  });
+  box.innerHTML=h;
+}
+</script>
 
 <script>
 function showPage(id, btn){
@@ -376,20 +398,22 @@ function getAIConfig(){
 
 // The instruction sent to every provider. Asks for strict JSON, in Hebrew, zero invention.
 function buildAIPrompt(txt, participants){
-  return `אתה עוזר לסיכום פגישות בעברית. להלן תמלול גולמי של פגישה. הפק סיכום מקצועי.
+  return `אתה עוזר לסיכום פגישות בעברית. להלן תמלול גולמי של פגישה. הפק סיכום מקצועי ומפורט.
 חוקים מחייבים:
 - אל תמציא מידע שלא נאמר בתמלול. אם משהו לא נאמר — אל תוסיף אותו.
 - אם שדה לא ידוע, כתוב "לא נקבע".
 - כתוב בעברית מקצועית, טון ברור וענייני.
+- הסיכום צריך להיות מפורט: פסקה של 4-6 משפטים שמכסה את הנושאים המרכזיים, ההקשר, ומה הוחלט. אל תסתפק במשפט אחד.
+- נסח כל החלטה, משימה ונושא פתוח במשפט מלא ומובן, לא בקיצור עמום.
 ${participants?`- משתתפים ידועים: ${participants}.`:''}
 
 החזר אך ורק JSON תקין, ללא טקסט נוסף, במבנה הבא:
 {
-  "summary": "תקציר קצר של עיקרי הדיון, 2-4 משפטים",
-  "decisions": ["החלטה 1", "החלטה 2"],
-  "open_items": ["נושא פתוח 1"],
-  "red_flags": ["סיכון/דגל 1"],
-  "tasks": [{"task":"תיאור המשימה","owner":"שם האחראי או לא נקבע","due":"תאריך יעד או לא נקבע"}]
+  "summary": "סיכום מפורט של הדיון — פסקה של 4-6 משפטים המכסה את הנושאים, ההקשר וההחלטות",
+  "decisions": ["החלטה מנוסחת במשפט מלא"],
+  "open_items": ["נושא פתוח מנוסח במשפט מלא"],
+  "red_flags": ["סיכון או דגל מנוסח במשפט מלא"],
+  "tasks": [{"task":"תיאור מלא של המשימה","owner":"שם האחראי או לא נקבע","due":"תאריך יעד או לא נקבע"}]
 }
 
 התמלול:
@@ -728,8 +752,21 @@ function stopRec(){
     }
     S.recognition=null;
     if(!txt){ notif('לא זוהה דיבור — ודא https + מיקרופון','e'); document.getElementById('rec-status').textContent='לחץ להתחלת הקלטה'; return; }
-    process(txt);
+    process(cleanTranscript(txt));
   }, 900);
+}
+
+// Light cleanup of common Hebrew speech-to-text noise (no meaning changes):
+// collapse repeated words, duplicate spaces, and repeated punctuation.
+function cleanTranscript(t){
+  if(!t) return t;
+  let s=t.replace(/\s+/g,' ').trim();
+  // collapse an immediately repeated word ("הוא הוא" -> "הוא")
+  s=s.replace(/\b([\u0590-\u05FF]{2,})\s+\1\b/g,'$1');
+  // collapse 3+ repeats too
+  s=s.replace(/\b([\u0590-\u05FF]{2,})(\s+\1\b)+/g,'$1');
+  s=s.replace(/([.!?])\1+/g,'$1').replace(/\s+([.,!?])/g,'$1').replace(/\s+/g,' ').trim();
+  return s;
 }
 
 // MARKERS
@@ -921,6 +958,7 @@ function showResults(txt,sum){
 
   panel.innerHTML=h; window.scrollTo({top:0,behavior:'smooth'});
   window._txt=txt; window._sum=sum; window._name=name;
+  try{ saveMeeting(name, txt, sum); }catch(e){ console.warn('history save failed', e); }
   notif('הסיכום מוכן — אשר לפני הפצה','i');
 }
 
@@ -976,7 +1014,7 @@ async function dlDocx(){
 async function dlPptx(){
   if(!window._sum){ notif('אין סיכום','e'); return; }
   const RTL={rtlMode:true,align:'right'};
-  const BG='0d1520', PANEL='141f30', INK='eef3fb';
+  const BG='ffffff', PANEL='f4f7fb', INK='1f2937';
   const aiCfg=getAIConfig();
   try{
     await loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js');
@@ -989,11 +1027,12 @@ async function dlPptx(){
     const titleSlide=(title,sub)=>{
       const sl=pptx.addSlide(); sl.background={color:BG};
       sl.addShape(RECT,{x:0,y:0,w:13.33,h:7.5,fill:{color:BG}});
-      sl.addShape(RECT,{x:13.03,y:0,w:0.3,h:7.5,fill:{color:'4d9fff'}});        // right accent bar
-      sl.addShape(RECT,{x:0,y:5.0,w:13.33,h:0.06,fill:{color:'2a3a55'}});       // divider
-      sl.addText(title,{x:0.6,y:2.4,w:11.9,h:1.4,fontSize:46,bold:true,color:'4d9fff',...RTL});
-      sl.addText(sub,{x:0.6,y:3.9,w:11.9,h:0.7,fontSize:22,color:INK,...RTL});
-      sl.addText('SUMIT',{x:0.6,y:6.7,w:6,h:0.4,fontSize:12,color:'5a6b85',align:'right',rtlMode:true});
+      sl.addShape(RECT,{x:13.03,y:0,w:0.3,h:7.5,fill:{color:'2d7ff0'}});        // right accent bar
+      sl.addShape(RECT,{x:0,y:0,w:13.33,h:0.9,fill:{color:PANEL}});            // top band
+      sl.addShape(RECT,{x:0.6,y:3.7,w:5,h:0.08,fill:{color:'2d7ff0'}});        // accent rule under title
+      sl.addText(title,{x:0.6,y:2.3,w:11.9,h:1.4,fontSize:46,bold:true,color:'1f3a5f',...RTL});
+      sl.addText(sub,{x:0.6,y:3.95,w:11.9,h:0.7,fontSize:22,color:'5a6b85',...RTL});
+      sl.addText('SUMIT',{x:0.6,y:6.7,w:6,h:0.4,fontSize:12,color:'9aa7ba',align:'right',rtlMode:true});
     };
 
     // Content slide: header band + accent title + slide number.
@@ -1017,7 +1056,7 @@ async function dlPptx(){
       catch(e){ console.error('pptx-ai',e); notif('בניית מצגת AI נכשלה — מצגת בסיסית במקום','e'); aiSlides=null; }
     }
 
-    const palette=['00d68f','4d9fff','ffb830','ff4d6a','9d7bff','29c2c9'];
+    const palette=['0a7d52','2d7ff0','c77700','c0392b','6d4ec7','138a90'];
 
     if(aiSlides){
       titleSlide(aiSlides.title||'סיכום פגישה', name+'   |   '+date);
@@ -1031,10 +1070,10 @@ async function dlPptx(){
     // Basic deck from the existing summary
     const s=window._sum;
     titleSlide('סיכום פגישה', name+'   |   '+date);
-    if(s.summary) bullets('סיכום כללי', s.summary.split('\n').filter(l=>l.trim()), '00d68f');
-    if(s.decisions.length) bullets('החלטות', s.decisions, '4d9fff');
-    if(s.open_items.length) bullets('נושאים פתוחים', s.open_items, 'ffb830');
-    if(s.red_flags.length) bullets('דגלים אדומים', s.red_flags, 'ff4d6a');
+    if(s.summary) bullets('סיכום כללי', s.summary.split('\n').filter(l=>l.trim()), '0a7d52');
+    if(s.decisions.length) bullets('החלטות', s.decisions, '2d7ff0');
+    if(s.open_items.length) bullets('נושאים פתוחים', s.open_items, 'c77700');
+    if(s.red_flags.length) bullets('דגלים אדומים', s.red_flags, 'c0392b');
     if(s.tasks.length) addTaskTableSlide(pptx, s.tasks, RTL, ()=>++pageNo);
     await pptx.writeFile({fileName:name+'_מצגת.pptx'});
     notif('מצגת הורדה','s');
@@ -1042,21 +1081,21 @@ async function dlPptx(){
 }
 
 function addTaskTableSlide(pptx, tasks, RTL, nextNo){
-  const BG='0d1520', PANEL='141f30', INK='eef3fb', accent='00d68f';
+  const BG='ffffff', PANEL='f4f7fb', INK='1f2937', accent='0a7d52';
   const RECT=pptx.ShapeType.rect;
   const st=pptx.addSlide(); st.background={color:BG};
   st.addShape(RECT,{x:13.03,y:0,w:0.3,h:7.5,fill:{color:accent}});
   st.addShape(RECT,{x:0,y:0,w:13.33,h:1.25,fill:{color:PANEL}});
   st.addShape(RECT,{x:0,y:1.25,w:13.33,h:0.05,fill:{color:accent}});
   st.addText('טבלת משימות',{x:0.6,y:0.28,w:11.9,h:0.7,fontSize:30,bold:true,color:accent,...RTL});
-  const hc={bold:true,fill:{color:'1d2c44'},color:'ffffff',...RTL,valign:'middle'};
+  const hc={bold:true,fill:{color:accent},color:'ffffff',...RTL,valign:'middle'};
   const rows=[[{text:'תאריך יעד',options:hc},{text:'אחראי',options:hc},{text:'משימה',options:hc}]];
-  tasks.forEach((x,i)=>{ const f={color:i%2?'10192a':'0d1520'}; rows.push([
+  tasks.forEach((x,i)=>{ const f={color:i%2?'eef3f9':'ffffff'}; rows.push([
     {text:String(x.due),options:{...RTL,color:INK,fill:f}},
     {text:String(x.owner),options:{...RTL,color:INK,fill:f}},
     {text:String(x.task),options:{...RTL,color:INK,fill:f}}
   ]);});
-  st.addTable(rows,{x:0.6,y:1.7,w:11.9,fontSize:13,border:{type:'solid',color:'2a3a55',pt:1},valign:'middle',colW:[2.4,2.4,7.1],rowH:0.5});
+  st.addTable(rows,{x:0.6,y:1.7,w:11.9,fontSize:13,border:{type:'solid',color:'d4dce6',pt:1},valign:'middle',colW:[2.4,2.4,7.1],rowH:0.5});
   if(nextNo) st.addText(String(nextNo()),{x:12.5,y:6.95,w:0.6,h:0.35,fontSize:12,color:'5a6b85',align:'center'});
 }
 function newRec(){S.fullText='';S.markers=[];document.getElementById('rec-timer').textContent='00:00';document.getElementById('mlog').innerHTML='<div class="mlog-empty">סימונים יופיעו כאן</div>';document.getElementById('results').style.display='none';document.getElementById('proc').style.display='none';document.getElementById('rec-card').style.display='block';document.getElementById('controls-row').style.display='grid';document.getElementById('ai-card').style.display='block';document.getElementById('upload-card').style.display='block';document.getElementById('mtg-name').value='';document.getElementById('mtg-parts').value='';document.getElementById('live-preview').style.display='none';resetRecUI();document.getElementById('rec-hint').textContent='המערכת תקליט את הפגישה. בסיום — תוצג התמלול והסיכום.';window._txt=null;window._sum=null;window._audioBlob=null;}
