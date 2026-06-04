@@ -93,6 +93,8 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
 .ab:hover{background:var(--s2);border-color:var(--blue)}
 .ab.ap{background:linear-gradient(135deg,var(--green),#00a86b);border-color:transparent;color:#000}
 .ab.ap:hover{opacity:.9}
+.ab.newmeet{display:inline-flex;justify-content:center;padding:15px 40px;font-size:16px;font-weight:700;border-radius:12px;background:linear-gradient(135deg,var(--blue),#2d7ff0);color:#fff;box-shadow:0 6px 20px rgba(77,159,255,.35);transition:transform .15s,box-shadow .15s}
+.ab.newmeet:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(77,159,255,.5);opacity:1}
 .rs{margin-bottom:26px}
 .rs h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .box{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:16px 18px;font-size:14px;line-height:1.65}
@@ -176,7 +178,17 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
       <div class="rec-timer" id="rec-timer">00:00</div>
       <div class="waveform" id="waveform"></div>
       <div class="rec-hint" id="rec-hint">המערכת תקליט את הפגישה. בסיום — תוצג התמלול והסיכום.</div>
+      <label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer;margin-top:14px">
+        <input type="checkbox" id="rec-sysaudio" style="width:auto;cursor:pointer"> הקלט גם שמע מערכת (לפגישות Zoom/Teams — שתף לשונית עם שמע)
+      </label>
       <div id="live-preview" style="display:none;margin-top:18px;padding:14px 16px;background:var(--s2);border:1px solid var(--border);border-radius:10px;font-size:14px;line-height:1.6;text-align:right;max-height:140px;overflow-y:auto;color:var(--text)"></div>
+    </div>
+
+    <!-- Upload existing recording -->
+    <div class="ctrl-card" id="upload-card" style="margin-bottom:24px">
+      <h4>יש לך כבר הקלטה? העלה לתמלול</h4>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.6">העלאת קובץ אודיו (mp3, m4a, wav, webm) ותמלולו אוטומטית. דורש מפתח OpenAI פעיל בכרטיס "סיכום חכם" (תמלול מתבצע על ידי Whisper של OpenAI).</p>
+      <input type="file" id="audio-file" accept="audio/*,video/mp4,.m4a,.mp3,.wav,.webm" onchange="uploadAudio(this)" style="font-size:13px;color:var(--text)">
     </div>
 
     <!-- AI Settings -->
@@ -597,8 +609,8 @@ async function startRec(){
       setTimeout(() => {
         if(S.manualStop) return;
         try{ rec.start(); console.log('[ASR] restarted'); }
-        catch(e){ console.warn('[ASR] restart failed, retrying:', e.message); setTimeout(()=>{ if(!S.manualStop){ try{rec.start();}catch(e2){ console.error('[ASR] retry failed:', e2.message); } } }, 500); }
-      }, 350);
+        catch(e){ console.warn('[ASR] restart failed, retrying:', e.message); setTimeout(()=>{ if(!S.manualStop){ try{rec.start();}catch(e2){ console.error('[ASR] retry failed:', e2.message); } } }, 300); }
+      }, 120);
     }
   };
 
@@ -613,7 +625,76 @@ async function startRec(){
   document.getElementById('rec-hint').textContent='לחץ ⏹ לעצירה — התמלול והסיכום יוצגו אוטומטית';
   ['mb-star','mb-flag','mb-check'].forEach(i=>document.getElementById(i).disabled=false);
   buildWave(); startTimer(); startWave();
+  startAudioCapture(document.getElementById('rec-sysaudio') && document.getElementById('rec-sysaudio').checked);
   notif('🎤 ההקלטה החלה','s');
+}
+
+/* ═══════════ AUDIO RECORDING ═══════════ */
+// Records the meeting audio (mic + optional system audio) in parallel with the
+// live transcription, so a full audio file can be downloaded afterwards.
+async function startAudioCapture(withSystem){
+  S._audioChunks=[]; S._mediaRec=null; S._audioStreams=[]; window._audioBlob=null;
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    const ctx=new Ctx(); const dest=ctx.createMediaStreamDestination();
+    const mic=await navigator.mediaDevices.getUserMedia({audio:true});
+    S._audioStreams.push(mic); ctx.createMediaStreamSource(mic).connect(dest);
+    if(withSystem){
+      try{
+        const sys=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+        S._audioStreams.push(sys);
+        const at=sys.getAudioTracks();
+        if(at.length){ ctx.createMediaStreamSource(new MediaStream([at[0]])).connect(dest); }
+        else notif('לא נתפס שמע מערכת — ודא שסימנת "שתף שמע" בחלון השיתוף','e');
+      }catch(e){ notif('שיתוף לשונית בוטל — מקליט מיקרופון בלבד','i'); }
+    }
+    const mime=MediaRecorder.isTypeSupported('audio/webm')?'audio/webm':'';
+    const mr=new MediaRecorder(dest.stream, mime?{mimeType:mime}:undefined);
+    mr.ondataavailable=e=>{ if(e.data&&e.data.size) S._audioChunks.push(e.data); };
+    mr.start(1000);
+    S._mediaRec=mr; S._audioCtx=ctx;
+  }catch(e){ console.warn('audio capture failed',e); notif('הקלטת שמע לא זמינה (נדרשת הרשאת מיקרופון)','e'); }
+}
+function stopAudioCapture(){
+  return new Promise(res=>{
+    const mr=S._mediaRec;
+    const stopStreams=()=>{ try{(S._audioStreams||[]).forEach(s=>s.getTracks().forEach(t=>t.stop()));}catch(e){} try{S._audioCtx&&S._audioCtx.close();}catch(e){} };
+    if(!mr){ stopStreams(); res(null); return; }
+    mr.onstop=()=>{ const blob=new Blob(S._audioChunks,{type:(S._audioChunks[0]&&S._audioChunks[0].type)||'audio/webm'}); window._audioBlob=blob; stopStreams(); res(blob); };
+    try{ if(mr.state!=='inactive') mr.stop(); else { stopStreams(); res(null); } }catch(e){ stopStreams(); res(null); }
+  });
+}
+function dlAudio(){
+  if(!window._audioBlob){ notif('אין הקלטת שמע','e'); return; }
+  const ext=(window._audioBlob.type.includes('webm'))?'webm':'audio';
+  saveBlob(window._audioBlob, (window._name||'פגישה')+'_הקלטה.'+ext);
+  notif('הקלטת השמע הורדה','s');
+}
+
+/* ═══════════ TRANSCRIBE UPLOADED FILE (Whisper) ═══════════ */
+async function uploadAudio(input){
+  const file=input.files&&input.files[0]; if(!file) return;
+  const provider=document.getElementById('ai-provider').value;
+  const key=document.getElementById('ai-key').value.trim();
+  if(provider!=='openai' || !key){ notif('תמלול קובץ דורש מפתח OpenAI — בחר OpenAI בכרטיס "סיכום חכם" והזן מפתח','e'); input.value=''; return; }
+  document.getElementById('rec-card').style.display='none';
+  document.getElementById('upload-card').style.display='none';
+  document.getElementById('controls-row').style.display='none';
+  document.getElementById('ai-card').style.display='none';
+  document.getElementById('proc').style.display='block';
+  document.getElementById('results').style.display='none';
+  setProc(30,'מתמלל את הקובץ...','שולח ל-Whisper של OpenAI');
+  try{
+    const fd=new FormData(); fd.append('file',file); fd.append('model','whisper-1'); fd.append('language','he');
+    const r=await fetch('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{'Authorization':'Bearer '+key},body:fd});
+    if(!r.ok) throw new Error('Whisper ('+r.status+'): '+(await r.text()).slice(0,160));
+    const d=await r.json(); const txt=(d.text||'').trim();
+    if(!txt) throw new Error('לא הופק טקסט מהקובץ');
+    S.markers=[];
+    setProc(65,'מסכם...','');
+    await process(txt);
+  }catch(e){ console.error('whisper',e); notif('תמלול הקובץ נכשל: '+e.message,'e'); newRec(); }
+  finally{ input.value=''; }
 }
 
 function resetRecUI(){
@@ -629,6 +710,7 @@ function stopRec(){
   S.rec=false;
   S.manualStop=true;   // authoritative signal: do NOT auto-restart
   if(S.recognition){ try{S.recognition.stop();}catch(e){} }
+  stopAudioCapture();   // finalize the audio file (sets window._audioBlob)
   stopTimer(); stopWave();
   document.getElementById('mic-btn').className='mic-btn';
   document.getElementById('mic-btn').textContent='🎤';
@@ -667,6 +749,7 @@ async function process(txt){
   document.getElementById('rec-card').style.display='none';
   document.getElementById('controls-row').style.display='none';
   document.getElementById('ai-card').style.display='none';
+  const uc=document.getElementById('upload-card'); if(uc) uc.style.display='none';
   document.getElementById('proc').style.display='block';
   document.getElementById('results').style.display='none';
 
@@ -816,7 +899,10 @@ function showResults(txt,sum){
     <button class="ab" onclick="dlTxt()">⬇ הורד TXT</button>
     <button class="ab" onclick="dlDocx()">📄 הורד Word</button>
     <button class="ab" onclick="dlPptx()">📊 הורד מצגת</button>
-    <button class="ab" onclick="newRec()">🎤 פגישה חדשה</button>
+    ${window._audioBlob?`<button class="ab" onclick="dlAudio()">🔊 הורד הקלטת שמע</button>`:''}
+  </div>
+  <div style="margin-top:22px;text-align:center">
+    <button class="ab ap newmeet" onclick="newRec()">🎤 התחל פגישה חדשה</button>
   </div>`;
 
   if(sum.summary) h+=`<div class="rs"><h3><span>📝</span> סיכום כללי</h3><div class="box">${esc(sum.summary).replace(/\n/g,'<br>')}</div></div>`;
@@ -973,7 +1059,7 @@ function addTaskTableSlide(pptx, tasks, RTL, nextNo){
   st.addTable(rows,{x:0.6,y:1.7,w:11.9,fontSize:13,border:{type:'solid',color:'2a3a55',pt:1},valign:'middle',colW:[2.4,2.4,7.1],rowH:0.5});
   if(nextNo) st.addText(String(nextNo()),{x:12.5,y:6.95,w:0.6,h:0.35,fontSize:12,color:'5a6b85',align:'center'});
 }
-function newRec(){S.fullText='';S.markers=[];document.getElementById('rec-timer').textContent='00:00';document.getElementById('mlog').innerHTML='<div class="mlog-empty">סימונים יופיעו כאן</div>';document.getElementById('results').style.display='none';document.getElementById('proc').style.display='none';document.getElementById('rec-card').style.display='block';document.getElementById('controls-row').style.display='grid';document.getElementById('ai-card').style.display='block';document.getElementById('mtg-name').value='';document.getElementById('mtg-parts').value='';document.getElementById('live-preview').style.display='none';resetRecUI();document.getElementById('rec-hint').textContent='המערכת תקליט את הפגישה. בסיום — תוצג התמלול והסיכום.';window._txt=null;window._sum=null;}
+function newRec(){S.fullText='';S.markers=[];document.getElementById('rec-timer').textContent='00:00';document.getElementById('mlog').innerHTML='<div class="mlog-empty">סימונים יופיעו כאן</div>';document.getElementById('results').style.display='none';document.getElementById('proc').style.display='none';document.getElementById('rec-card').style.display='block';document.getElementById('controls-row').style.display='grid';document.getElementById('ai-card').style.display='block';document.getElementById('upload-card').style.display='block';document.getElementById('mtg-name').value='';document.getElementById('mtg-parts').value='';document.getElementById('live-preview').style.display='none';resetRecUI();document.getElementById('rec-hint').textContent='המערכת תקליט את הפגישה. בסיום — תוצג התמלול והסיכום.';window._txt=null;window._sum=null;window._audioBlob=null;}
 
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function showLive(txt){const el=document.getElementById('live-preview');el.style.display='block';el.textContent=txt;el.scrollTop=el.scrollHeight;}
