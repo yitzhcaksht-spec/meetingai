@@ -179,7 +179,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
       <div class="waveform" id="waveform"></div>
       <div class="rec-hint" id="rec-hint">המערכת תקליט את הפגישה. בסיום — תוצג התמלול והסיכום.</div>
       <label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer;margin-top:14px">
-        <input type="checkbox" id="rec-sysaudio" style="width:auto;cursor:pointer"> הקלט גם שמע מערכת (לפגישות Zoom/Teams — שתף לשונית עם שמע)
+        <input type="checkbox" id="rec-sysaudio" style="width:auto;cursor:pointer"> פגישה וירטואלית (Zoom/Teams) — קולט את כל הדוברים. שתף לשונית עם שמע; דורש מפתח OpenAI לתמלול מלא
       </label>
       <div id="live-preview" style="display:none;margin-top:18px;padding:14px 16px;background:var(--s2);border:1px solid var(--border);border-radius:10px;font-size:14px;line-height:1.6;text-align:right;max-height:140px;overflow-y:auto;color:var(--text)"></div>
     </div>
@@ -649,7 +649,8 @@ async function startRec(){
   document.getElementById('rec-hint').textContent='לחץ ⏹ לעצירה — התמלול והסיכום יוצגו אוטומטית';
   ['mb-star','mb-flag','mb-check'].forEach(i=>document.getElementById(i).disabled=false);
   buildWave(); startTimer(); startWave();
-  startAudioCapture(document.getElementById('rec-sysaudio') && document.getElementById('rec-sysaudio').checked);
+  S._sysAudioMode = !!(document.getElementById('rec-sysaudio') && document.getElementById('rec-sysaudio').checked);
+  startAudioCapture(S._sysAudioMode);
   notif('🎤 ההקלטה החלה','s');
 }
 
@@ -734,7 +735,8 @@ function stopRec(){
   S.rec=false;
   S.manualStop=true;   // authoritative signal: do NOT auto-restart
   if(S.recognition){ try{S.recognition.stop();}catch(e){} }
-  stopAudioCapture();   // finalize the audio file (sets window._audioBlob)
+  const sysMode = S._sysAudioMode;
+  const audioPromise = stopAudioCapture();   // finalize the audio file (sets window._audioBlob)
   stopTimer(); stopWave();
   document.getElementById('mic-btn').className='mic-btn';
   document.getElementById('mic-btn').textContent='🎤';
@@ -743,17 +745,53 @@ function stopRec(){
   ['mb-star','mb-flag','mb-check'].forEach(i=>document.getElementById(i).disabled=true);
 
   // give recognition time to flush the final result chunk
-  setTimeout(()=>{
+  setTimeout(async ()=>{
     let txt = (S._getFinal ? S._getFinal() : S.fullText).trim();
-    // fallback: use whatever is shown in live preview
     if(!txt){
       const lp = document.getElementById('live-preview').textContent.trim();
       if(lp && !lp.startsWith('✓') && !lp.startsWith('❌') && !lp.startsWith('⚠️') && lp!=='...') txt = lp;
     }
     S.recognition=null;
+
+    // Virtual-meeting path: if system audio was captured and an OpenAI key is
+    // available, transcribe the FULL recording via Whisper so every speaker
+    // (including those heard through headphones) is captured — not just the mic.
+    const blob = await audioPromise.catch(()=>null);
+    const provider=document.getElementById('ai-provider').value;
+    const key=document.getElementById('ai-key').value.trim();
+    if(sysMode && blob && provider==='openai' && key){
+      transcribeBlobWhisper(blob, key);
+      return;
+    }
+    if(sysMode && blob && !(provider==='openai' && key)){
+      notif('להקלטת שיחה וירטואלית — הזן מפתח OpenAI לתמלול מלא של כל הדוברים','i');
+    }
+
     if(!txt){ notif('לא זוהה דיבור — ודא https + מיקרופון','e'); document.getElementById('rec-status').textContent='לחץ להתחלת הקלטה'; return; }
     process(cleanTranscript(txt));
   }, 900);
+}
+
+// Transcribe a recorded audio blob via Whisper (captures all speakers).
+async function transcribeBlobWhisper(blob, key){
+  document.getElementById('rec-card').style.display='none';
+  const uc=document.getElementById('upload-card'); if(uc) uc.style.display='none';
+  document.getElementById('controls-row').style.display='none';
+  document.getElementById('ai-card').style.display='none';
+  document.getElementById('proc').style.display='block';
+  document.getElementById('results').style.display='none';
+  setProc(35,'מתמלל את הפגישה...','Whisper מתמלל את כל הדוברים');
+  try{
+    const fd=new FormData();
+    fd.append('file', new File([blob], 'meeting.webm', {type:blob.type||'audio/webm'}));
+    fd.append('model','whisper-1'); fd.append('language','he');
+    const r=await fetch('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{'Authorization':'Bearer '+key},body:fd});
+    if(!r.ok) throw new Error('Whisper ('+r.status+'): '+(await r.text()).slice(0,160));
+    const d=await r.json(); const txt=(d.text||'').trim();
+    if(!txt) throw new Error('לא הופק טקסט');
+    setProc(70,'מסכם...','');
+    await process(cleanTranscript(txt));
+  }catch(e){ console.error('whisper-blob',e); notif('תמלול ההקלטה נכשל: '+e.message,'e'); document.getElementById('rec-status').textContent='לחץ להתחלת הקלטה'; newRec(); }
 }
 
 // Light cleanup of common Hebrew speech-to-text noise (no meaning changes):
