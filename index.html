@@ -1,12 +1,9 @@
-cd /workspaces/meetingai
-git add index.html
-git commit -m "Fix stray script tag that leaked history code as text"
-git push<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SUMIT — חברת החשמל</title>
+<title>SUMIEC — חברת החשמל</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -162,7 +159,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
 <body>
 
 <nav>
-  <div class="nav-logo"><div class="nav-icon">⚡</div><span class="nav-name">SUMIT</span></div>
+  <div class="nav-logo"><div class="nav-icon">⚡</div><span class="nav-name">SUMIEC</span></div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('app',this)">הקלטה</button>
     <button class="nav-tab" onclick="showPage('history',this);renderHistory()">פגישות קודמות</button>
@@ -291,13 +288,13 @@ nav{position:sticky;top:0;z-index:100;background:rgba(7,11,16,.9);backdrop-filte
 
 <div id="page-about" class="page">
   <div class="mhero">
-    <h1>SUMIT — אודות ומדריך</h1>
+    <h1>SUMIEC — אודות ומדריך</h1>
     <p>מערכת תמלול וסיכום פגישות · חברת החשמל</p>
   </div>
   <div class="app-wrap">
     <div class="ctrl-card" style="margin-bottom:20px">
       <h4>מה המערכת עושה</h4>
-      <p style="font-size:13.5px;color:var(--text);line-height:1.8;margin-top:8px">SUMIT מקליטה פגישה, מתמללת אותה לעברית, ומפיקה סיכום מסודר הכולל סקירה כללית, החלטות, נושאים פתוחים, דגלים וטבלת משימות (משימה · אחראי · תאריך יעד). הסיכום מופק מקומית בדפדפן, או — אם הוזן מפתח API — על ידי מנוע AI איכותי יותר. ניתן לייצא את התוצאה ל-Word, מצגת ו-TXT, ולשמור היסטוריית פגישות במחשב. עיקרון מנחה: <strong>אפס המצאה</strong> — המערכת מסכמת רק את מה שנאמר בפועל.</p>
+      <p style="font-size:13.5px;color:var(--text);line-height:1.8;margin-top:8px">SUMIEC מקליטה פגישה, מתמללת אותה לעברית, ומפיקה סיכום מסודר הכולל סקירה כללית, החלטות, נושאים פתוחים, דגלים וטבלת משימות (משימה · אחראי · תאריך יעד). הסיכום מופק מקומית בדפדפן, או — אם הוזן מפתח API — על ידי מנוע AI איכותי יותר. ניתן לייצא את התוצאה ל-Word, מצגת ו-TXT, ולשמור היסטוריית פגישות במחשב. עיקרון מנחה: <strong>אפס המצאה</strong> — המערכת מסכמת רק את מה שנאמר בפועל.</p>
     </div>
 
     <div class="ctrl-card" style="margin-bottom:20px">
@@ -1174,7 +1171,7 @@ async function dlPptx(){
       sl.addShape(RECT,{x:0.6,y:3.7,w:5,h:0.08,fill:{color:'2d7ff0'}});        // accent rule under title
       sl.addText(title,{x:0.6,y:2.3,w:11.9,h:1.4,fontSize:46,bold:true,color:'1f3a5f',...RTL});
       sl.addText(sub,{x:0.6,y:3.95,w:11.9,h:0.7,fontSize:22,color:'5a6b85',...RTL});
-      sl.addText('SUMIT',{x:0.6,y:6.7,w:6,h:0.4,fontSize:12,color:'9aa7ba',align:'right',rtlMode:true});
+      sl.addText('SUMIEC',{x:0.6,y:6.7,w:6,h:0.4,fontSize:12,color:'9aa7ba',align:'right',rtlMode:true});
     };
 
     // Content slide: header band + accent title + slide number.
